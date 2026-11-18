@@ -56,7 +56,6 @@ Every number below comes from real runs on this laptop:
 
 | Item | Spec |
 | :--- | :--- |
-| Model | Mechrevo MEOW R16 24H (laptop) |
 | CPU | AMD Ryzen 9 7845HX |
 | GPU | NVIDIA RTX 4060 Laptop, 8 GB VRAM |
 | RAM | 32 GB |

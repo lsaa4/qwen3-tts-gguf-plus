@@ -56,7 +56,6 @@
 
 | 项目 | 配置 |
 | :--- | :--- |
-| 机型 | 机械革命 MEOW R16 24H（笔记本） |
 | CPU | AMD Ryzen 9 7845HX |
 | 显卡 | NVIDIA RTX 4060 Laptop，8 GB 显存 |
 | 内存 | 32 GB |
