@@ -2,7 +2,9 @@
 
 [中文](readme.md)
 
-Qwen3-TTS running on llama.cpp, with streaming synthesis and voice cloning.
+Qwen3-TTS running on llama.cpp, with streaming synthesis and voice cloning, plus a graphical interface and an OpenAI-compatible local HTTP server.
+
+On Windows just double-click `setup.bat` to prepare the environment, then `启动GUI.bat` to launch the GUI.
 
 ## Model Types
 
@@ -119,6 +121,25 @@ The best dubbing workflow is therefore: use Custom Voice to gacha-roll the best 
 
 ## Getting Started
 
+### One-Click Setup (Windows)
+
+No manual Python or llama.cpp wiring needed:
+
+| File | Purpose |
+| :--- | :--- |
+| `setup.bat` | Checks and repairs everything: Python version, `.venv`, dependencies, llama.cpp runtime, model files, FFmpeg, voice folder |
+| `启动GUI.bat` | Launch the GUI (runs a quick check first) |
+| `启动服务.bat` | Start the HTTP server only, no GUI |
+| `克隆音色.bat` | Interactive voice cloning |
+
+Just want a health report:
+
+```bash
+python install.py --check       # full check
+python install.py --check -q    # problems only
+python install.py               # check and repair, add --yes to skip prompts
+```
+
 #### Download Models
 
 - [Qwen3-TTS-12Hz-1.7B-Base](https://www.modelscope.cn/models/Qwen/Qwen3-TTS-12Hz-1.7B-Base)
@@ -140,7 +161,7 @@ modelscope download --model Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
 
 #### Dependencies
 
-Pinned to **llama.cpp b10621**. Download a prebuilt binary from [llama.cpp Releases](https://github.com/ggml-org/llama.cpp/releases) and put the DLLs into `qwen3_tts_gguf/bin/`:
+Pinned to **llama.cpp b10621**. Download a prebuilt binary from [llama.cpp Releases](https://github.com/ggml-org/llama.cpp/releases) and put the DLLs into `qwen3_tts_gguf/inference/bin/` (`setup.bat` downloads and unpacks them here automatically):
 
 | Platform | Download |
 |------|----------|
@@ -200,11 +221,25 @@ Once done, `EXPORT_DIR` contains everything you need.
 
 ### GUI Mode (Recommended)
 
+Double-click `启动GUI.bat`, or:
+
 ```
 python 52-GUI.py
 ```
 
-Graphical interface: model loading (LLM device / optional ONNX components), voice cloning / custom voice / design, batch tasks written to wav+json, and a model-slimming tool.
+Seven tabs:
+
+| Tab | Purpose |
+| :--- | :--- |
+| Clone | Clone a voice from reference audio, batch export wav/json |
+| Custom Voice | Built-in voices with style instructions |
+| Voice Design | Describe a voice in natural language |
+| Service | Expose the engine as a local HTTP server |
+| Tools | Rebuild voice vectors, convert WAV ↔ JSON |
+| Settings | Single-model mode, UI language |
+| Log | Runtime log |
+
+While loading a model you can pick the LLM device (GPU/CPU) and the ONNX component device (GPU/CPU) separately — push the encoder to CPU when VRAM is tight.
 
 ### Script Mode
 
@@ -223,6 +258,64 @@ python 51-Interactive-Clone.py
 ```
 
 Start it and just type — it synthesizes and plays as you go.
+
+## HTTP API Server
+
+The **Service** tab turns the engine into an **OpenAI-compatible** local HTTP server. Clients that accept a custom endpoint (SillyTavern, Cherry Studio, Open WebUI, AnythingLLM) can simply point at `http://127.0.0.1:8899`.
+
+Headless usage:
+
+```bash
+启动服务.bat                                    # 127.0.0.1:8899 by default
+python tts_server.py --host 0.0.0.0 --port 8899 --voice 巧克力
+```
+
+### Endpoints
+
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/audio/speech` | Synthesize speech, returns audio bytes |
+| `GET` | `/v1/voices` | List available voices (json / wav in the voice folder) |
+| `GET` | `/v1/models` | OpenAI model list with the single local model |
+| `GET` | `/health` | Health check: whether the engine is ready, current voice |
+
+### Speech request
+
+```bash
+curl http://127.0.0.1:8899/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"input":"Hello there.","voice":"巧克力","response_format":"mp3"}' \
+  --output hello.mp3
+```
+
+| Field | Default | Description |
+| :--- | :--- | :--- |
+| `input` | required | Text to synthesize (`text` also accepted) |
+| `voice` | server default | Voice name without extension, looked up in the voice folder |
+| `response_format` | `mp3` | `mp3` / `wav` / `flac` / `opus` / `aac` / `pcm`; non-wav goes through FFmpeg |
+| `language` | `Chinese` | `Chinese` / `English` / `Japanese` / `Korean`, dialects included |
+| `speed` | `1.0` | Playback rate multiplier |
+| `temperature` | 0.6 | Sampling temperature |
+| `seed` | 42 | Fixed seed makes output reproducible |
+
+The engine loads lazily on the first request (3-6 s with DirectML) and is reused afterwards, so consecutive calls do not re-initialize. Synthesis is serialized; parallel requests queue up.
+
+### Client example
+
+Point the OpenAI SDK at the local endpoint:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8899/v1", api_key="not-needed")
+audio = client.audio.speech.create(
+    model="qwen3-tts-gguf",
+    voice="巧克力",
+    input="What is for dinner?",
+    response_format="mp3",
+)
+audio.stream_to_file("hello.mp3")
+```
 
 ## Code Usage
 
@@ -298,6 +391,14 @@ The official implementation needs lots of VRAM. llama.cpp is lean, and works wit
 **Q: Streaming vs offline?**
 
 Streaming plays as it synthesizes, with low first-packet latency (~300 ms).
+
+**Q: The server refuses to start, saying the port is in use?**
+
+Pick another port, or free 8899 first. On Windows: `netstat -ano | findstr :8899` gives you the PID.
+
+**Q: A client connects but hangs forever?**
+
+The engine is lazily loaded, so the first request waits for the model (3-6 s with DirectML). Check `curl http://127.0.0.1:8899/health` and see whether `engine` is `true`.
 
 **Q: How do I tune quality?**
 

@@ -2,7 +2,9 @@
 
 [English](readme.en.md)
 
-用 llama.cpp 跑的 Qwen3-TTS，支持流式合成、声音克隆。
+用 llama.cpp 跑的 Qwen3-TTS，支持流式合成、声音克隆，附带图形界面和 OpenAI 兼容的本地 HTTP 服务。
+
+Windows 上双击 `setup.bat` 装好环境，再双击 `启动GUI.bat` 就能用。
 
 ## 模型类型
 
@@ -119,6 +121,37 @@ ctx ≈ 10 + 16.5 × 总音频秒数
 
 ## 快速开始
 
+### 一键部署（Windows）
+
+环境、模型、运行库都不用手动折腾，双击即可：
+
+| 文件 | 作用 |
+| :--- | :--- |
+| `setup.bat` | 体检 + 自动修复：Python 版本、`.venv`、依赖、llama.cpp 运行库、模型文件、FFmpeg、音色目录，缺什么装什么 |
+| `启动GUI.bat` | 启动图形界面（启动前跑一次快速体检） |
+| `启动服务.bat` | 只启 HTTP 服务，不开界面 |
+| `克隆音色.bat` | 交互式克隆音色 |
+
+只想看看环境有没有问题：
+
+```bash
+python install.py --check       # 完整体检
+python install.py --check -q    # 只报问题
+python install.py               # 体检 + 自动修复，加 --yes 免确认
+```
+
+体检输出长这样：
+
+```
+[ OK ] Python 版本    3.14.7
+[ OK ] 虚拟环境 .venv  Python 3.14.7
+[ OK ] Python 依赖     齐全，加速 DmlExecutionProvider
+[ OK ] llama.cpp 运行库  qwen3_tts_gguf\inference\bin  共 94 MB
+[ OK ] 模型文件 model-base  6 个文件齐全，2.3 GB
+[ OK ] FFmpeg  7.1.1-essentials_build  C:\ffmpeg\bin\ffmpeg.EXE
+[ OK ] 音色目录  9 个音色
+```
+
 #### 下载模型
 
 - [Qwen3-TTS-12Hz-1.7B-Base](https://www.modelscope.cn/models/Qwen/Qwen3-TTS-12Hz-1.7B-Base)
@@ -140,7 +173,7 @@ modelscope download --model Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
 
 #### 依赖环境
 
-适配版本 **llama.cpp b10621**。从 [llama.cpp Releases](https://github.com/ggml-org/llama.cpp/releases) 下载预编译二进制，将 DLL 放入 `qwen3_tts_gguf/bin/`：
+适配版本 **llama.cpp b10621**。从 [llama.cpp Releases](https://github.com/ggml-org/llama.cpp/releases) 下载预编译二进制，将 DLL 放入 `qwen3_tts_gguf/inference/bin/`（`setup.bat` 会自动下载并解压到这个位置）：
 
 | 平台 | 下载文件 |
 |------|----------|
@@ -201,11 +234,25 @@ python 34-Quantize-Predictor-GGUF.py    # 量化为 q8_0，这是推理引擎默
 
 ### GUI 模式（推荐）
 
+双击 `启动GUI.bat`，或：
+
 ```
 python 52-GUI.py
 ```
 
-图形界面：模型载入（LLM 设备 / ONNX 组件可选）、声音克隆 / 音色 / 设计、批量任务落盘 wav+json、模型瘦身工具。
+七个标签页：
+
+| 标签页 | 用途 |
+| :--- | :--- |
+| 克隆 | 用参考音频克隆音色，批量出 wav/json |
+| 自定义音色 | 内置音色 + 风格指令 |
+| 音色设计 | 用自然语言描述音色 |
+| 服务 | 把引擎挂成本地 HTTP 服务，供其他程序调用 |
+| 工具 | 音色向量重建、WAV ↔ JSON 互转 |
+| 设置 | 单模型模式、界面语言 |
+| 日志 | 运行日志 |
+
+模型载入时可分别指定 LLM 设备（GPU/CPU）和 ONNX 组件设备（GPU/CPU），显存档位不够时把编码器丢给 CPU。
 
 ### 脚本模式
 
@@ -224,6 +271,64 @@ python 51-Interactive-Clone.py
 ```
 
 启动后直接打字，边推边播。
+
+## HTTP API 服务
+
+GUI 的「服务」页可以把引擎挂成一个 **OpenAI 兼容**的本地 HTTP 服务，SillyTavern、Cherry Studio、Open WebUI、AnythingLLM 这类支持自定义 endpoint 的客户端直接填 `http://127.0.0.1:8899` 就能用。
+
+不想开界面也可以单独跑：
+
+```bash
+启动服务.bat                                    # 默认 127.0.0.1:8899
+python tts_server.py --host 0.0.0.0 --port 8899 --voice 巧克力
+```
+
+### 接口
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| `POST` | `/v1/audio/speech` | 合成语音，返回音频字节流 |
+| `GET` | `/v1/voices` | 列出可用音色（音色目录下的 json / wav） |
+| `GET` | `/v1/models` | OpenAI 模型列表，返回一个本地模型 |
+| `GET` | `/health` | 健康检查，返回引擎是否就绪、当前音色 |
+
+### 合成请求
+
+```bash
+curl http://127.0.0.1:8899/v1/audio/speech ^
+  -H "Content-Type: application/json" ^
+  -d "{\"input\":\"你好，我是巧克力。\",\"voice\":\"巧克力\",\"response_format\":\"mp3\"}" ^
+  --output hello.mp3
+```
+
+| 字段 | 默认 | 说明 |
+| :--- | :--- | :--- |
+| `input` | 必填 | 要合成的文本（也接受 `text`） |
+| `voice` | 服务默认音色 | 音色名，不带后缀，在音色目录里查找 |
+| `response_format` | `mp3` | `mp3` / `wav` / `flac` / `opus` / `aac` / `pcm`，非 wav 走 FFmpeg 转码 |
+| `language` | `Chinese` | `Chinese` / `English` / `Japanese` / `Korean` / 各语种与方言 |
+| `speed` | `1.0` | 语速倍率，1.25 表示快 25% |
+| `temperature` | 服务默认 0.6 | 采样温度，越小越稳 |
+| `seed` | 服务默认 42 | 随机种子，固定后输出可复现 |
+
+引擎在第一次请求时才载入（DirectML 下约 3–6 秒），之后复用同一个 stream，因此连续请求不会反复初始化。合成是串行的，多个请求会排队。
+
+### 客户端接入示例
+
+OpenAI SDK 直接改 base_url：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8899/v1", api_key="not-needed")
+audio = client.audio.speech.create(
+    model="qwen3-tts-gguf",
+    voice="巧克力",
+    input="今晚吃什么？",
+    response_format="mp3",
+)
+audio.stream_to_file("hello.mp3")
+```
 
 ## 代码调用
 
@@ -300,11 +405,20 @@ CustomVoice 模型内置 9 个音色：
 
 流式边推边播，首包延迟低（~300ms）。
 
+**Q: 服务起不来，提示端口被占用？**
+
+换一个端口，或者先关掉占用 8899 的进程。Windows 上可以用 `netstat -ano | findstr :8899` 找到 PID。
+
+**Q: 客户端连上了但一直转圈？**
+
+引擎是懒加载的，第一次请求要等模型载入（DirectML 下 3–6 秒）。先 `curl http://127.0.0.1:8899/health` 看 `engine` 是否为 `true`。
+
 **Q: 怎么调质量？**
 
 `TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)` 温度控制随机性，用种子控制稳定复现。
 
 ## 相关链接
 
+- [上游项目：HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF)
 - [Qwen3-TTS 技术报告](./Qwen3-TTS%20Technical%20Report.md)
 - [llama.cpp](https://github.com/ggerganov/llama.cpp)
