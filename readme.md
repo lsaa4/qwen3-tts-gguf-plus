@@ -4,6 +4,8 @@
 
 用 llama.cpp 跑的 Qwen3-TTS，支持流式合成、声音克隆，附带图形界面和 OpenAI 兼容的本地 HTTP 服务。
 
+本项目基于 [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF)（MIT）二次开发，在上游基础上新增图形界面、OpenAI 兼容 HTTP 服务与一键安装脚本。
+
 Windows 上双击 `setup.bat` 装好环境，再双击 `启动GUI.bat` 就能用。
 
 ## 模型类型

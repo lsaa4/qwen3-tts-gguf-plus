@@ -4,6 +4,8 @@
 
 Qwen3-TTS running on llama.cpp, with streaming synthesis and voice cloning, plus a graphical interface and an OpenAI-compatible local HTTP server.
 
+Built on [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF) (MIT). This version adds a graphical interface, an OpenAI-compatible HTTP server and a one-click installer on top of the upstream project.
+
 On Windows just double-click `setup.bat` to prepare the environment, then `启动GUI.bat` to launch the GUI.
 
 ## Model Types
