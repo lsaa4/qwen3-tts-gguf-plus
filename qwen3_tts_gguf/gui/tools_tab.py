@@ -32,7 +32,7 @@ class ToolsTab(TTSPageBase):
     # ---------- 载入区（比生成页瘦：无上下文/LLM 设备选项） ----------
 
     def _build_load_group(self):
-        group = ttkb.Labelframe(self, text=t("load.group"), padding=8)
+        group = ttkb.Labelframe(self.page, text=t("load.group"), padding=8)
         group.grid(row=0, column=0, sticky=EW)
         group.columnconfigure(1, weight=1)
 
@@ -70,7 +70,7 @@ class ToolsTab(TTSPageBase):
     # ---------- 工具区 ----------
 
     def _build_infer_group(self):
-        wrap = ttkb.Frame(self)
+        wrap = ttkb.Frame(self.page)
         wrap.grid(row=1, column=0, sticky=EW, pady=(10, 0))
         wrap.columnconfigure(0, weight=1)
 

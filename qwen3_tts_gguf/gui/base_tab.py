@@ -28,6 +28,7 @@ from qwen3_tts_gguf.inference import TTSEngine, TTSConfig
 from qwen3_tts_gguf.inference.batch import BatchRunner
 
 from .i18n import t
+from .scroll_page import ScrollPage
 from .log_tab import PrintRedirect, QueueLogHandler
 
 # 设备选项：LLM = Talker + Predictor (GGUF/llama.cpp)；ONNX 组件 = 解码器/编解码器/说话人编码器
@@ -150,10 +151,15 @@ class TTSPageBase(ttkb.Frame):
     _log_hooked = False     # 日志 handler / stdout 重定向全局只挂一次
 
     def __init__(self, master):
-        super().__init__(master, padding=10)
+        super().__init__(master)
+        # 1080p + 150% DPI 下逻辑高度只有 720，整页固定高度会顶出状态栏，
+        # 所以页面套一层可滚动容器：内容够高时滚动，不够时不显示滚动条
+        self.scroller = ScrollPage(self)
+        self.scroller.pack(fill=BOTH, expand=True)
+        self.page = self.scroller.body
         self._build_load_group()
         self._build_infer_group()
-        self.columnconfigure(0, weight=1)
+        self.page.columnconfigure(0, weight=1)
 
         # 引擎与生成状态 (worker 线程写，UI 线程经 ui_queue 读)
         self.engine = None
@@ -166,7 +172,7 @@ class TTSPageBase(ttkb.Frame):
     # ---------- 载入区 ----------
 
     def _build_load_group(self):
-        group = ttkb.Labelframe(self, text=t("load.group"), padding=8)
+        group = ttkb.Labelframe(self.page, text=t("load.group"), padding=8)
         group.grid(row=0, column=0, sticky=EW)
         group.columnconfigure(1, weight=1)
 
@@ -198,16 +204,17 @@ class TTSPageBase(ttkb.Frame):
         self._load_fields = [self.model_entry, self.n_ctx_entry, self.llm_combo, self.onnx_combo, browse_btn]
 
         # 文本随状态切换：未载入叫"载入"，载入后叫"卸载"（on_load_toggle 里改）
-        self.load_btn = ttkb.Button(group, text=t("load.load"), command=self.on_load_toggle, width=14, bootstyle=SUCCESS)
+        self.load_btn = ttkb.Button(group, text=t("load.load"), command=self.on_load_toggle, width=12,
+                                    bootstyle=SUCCESS)
         self.load_btn.grid(row=1, column=2, sticky=E, pady=4)
 
     # ---------- 推理区 ----------
 
     def _build_infer_group(self):
-        group = ttkb.Labelframe(self, text=t("gen.group"), padding=8)
-        group.grid(row=1, column=0, sticky=NSEW, pady=(10, 0))
+        group = ttkb.Labelframe(self.page, text=t("gen.group"), padding=8)
+        group.grid(row=1, column=0, sticky=NSEW, pady=(14, 0))
         group.columnconfigure(1, weight=1)
-        self.rowconfigure(1, weight=1)
+        self.page.rowconfigure(1, weight=1)
 
         row = self._build_source_rows(group)
 
@@ -217,7 +224,7 @@ class TTSPageBase(ttkb.Frame):
         group.rowconfigure(row, weight=1)
         text_group.columnconfigure(0, weight=1)
         text_group.rowconfigure(0, weight=1)
-        self.task_text = tk.Text(text_group, height=14, wrap="none", relief="flat",
+        self.task_text = tk.Text(text_group, height=10, wrap="none", relief="flat",
                                  padx=6, pady=4, highlightthickness=1,
                                  highlightbackground="#c9c9c9", highlightcolor="#1a7f8e")
         ybar = ttkb.Scrollbar(text_group, orient=VERTICAL, command=self.task_text.yview)
@@ -285,9 +292,10 @@ class TTSPageBase(ttkb.Frame):
         bar = ttkb.Frame(group)
         bar.grid(row=row, column=0, columnspan=3, sticky=EW)
         self.start_btn = ttkb.Button(bar, text=t("gen.start"), command=self.on_start_stop, width=14,
-                                     bootstyle=PRIMARY, state="disabled")  # 引擎载入前不可生成
+                                     bootstyle=SUCCESS, state="disabled")  # 引擎载入前不可生成
         self.start_btn.pack(side=RIGHT)
-        ttkb.Button(bar, text=t("gen.open_output"), command=self.on_open_output, width=14).pack(side=RIGHT, padx=(0, 8))
+        ttkb.Button(bar, text=t("gen.open_output"), command=self.on_open_output, width=12,
+                    bootstyle="secondary-outline").pack(side=RIGHT, padx=(0, 8))
         # 并发路数：每轮同时生成的路数，任务文本按行拆分后按此分批
         self.n_paths = tk.IntVar(value=32)
         ttkb.Label(bar, text=t("gen.n_paths")).pack(side=LEFT, padx=(0, 6))
@@ -352,7 +360,7 @@ class TTSPageBase(ttkb.Frame):
         """生成中: 开始变停止、卸载按钮禁用（须先停止再卸载）"""
         self.generating = on
         self.start_btn.configure(text=t("gen.stop") if on else t("gen.start"),
-                                 bootstyle=DANGER if on else PRIMARY, state="normal")
+                                 bootstyle=DANGER if on else SUCCESS, state="normal")
         self.load_btn.configure(state="disabled" if on else "normal")
         if not on:
             self.progress.configure(value=0)
