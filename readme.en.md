@@ -148,6 +148,8 @@ python tts_server.py --port 8899       # HTTP server
 python 51-Interactive-Clone.py         # interactive cloning
 ```
 
+Cloned voice files (`output/elaborate/*.json` plus reference audio) are personal voice biometrics, so they are not shipped in the repo — run the cloning step once after setup.
+
 ### Manual setup (no bat files)
 
 **Dependencies**
@@ -297,7 +299,7 @@ from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:8899/v1", api_key="not-needed")
 audio = client.audio.speech.create(
     model="qwen3-tts-gguf",
-    voice="巧克力",
+    voice="myvoice",  # replace with your own cloned voice name
     input="What's for dinner?",
     response_format="mp3",
 )
@@ -314,7 +316,7 @@ engine = TTSEngine(model_dir="model-base")
 stream = engine.create_stream()
 
 # Set a voice (.wav path, .json path or TTSResult object)
-stream.set_voice("output/elaborate/sample.json")
+stream.set_voice("output/elaborate/myvoice.json")  # generate it yourself first
 
 # Configure inference
 config = TTSConfig(

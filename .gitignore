@@ -37,10 +37,13 @@ ref/*
 *.ogg
 *.m4a
 
-# ==================== 输出（仅 elaborate 样例入库）====================
+# ==================== 输出 ====================
+# 音色文件（*.json / *.wav）属于个人声音特征，不入库，只保留空目录
 output/*
 !output/elaborate/
-
+!output/elaborate/.gitkeep
+output/elaborate/*
+!output/elaborate/.gitkeep
 # ==================== 日志 / 临时 ====================
 *.log
 logs/

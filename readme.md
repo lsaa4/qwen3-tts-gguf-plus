@@ -88,7 +88,7 @@ RTF 0.35 表示生成 1 秒音频只要 0.35 秒，比实时播放快约三倍�
 [ OK ] llama.cpp 运行库  qwen3_tts_gguf\inference\bin  共 94 MB
 [ FAIL ] 模型文件 model-base  目录不存在
 [ OK ] FFmpeg  7.1.1-essentials_build  C:\ffmpeg\bin\ffmpeg.EXE
-[ OK ] 音色目录  9 个音色
+[ OK ] 音色目录  0 个音色（可自行克隆）
 ```
 
 第一遍通常只有「模型文件」一项是红的，这是正常的——下一步解决。
@@ -147,6 +147,8 @@ python 52-GUI.py                       # 图形界面
 python tts_server.py --port 8899       # HTTP 服务
 python 51-Interactive-Clone.py         # 交互式克隆
 ```
+
+克隆出来的音色文件（`output/elaborate/*.json` 和参考音频）属于个人声音特征，仓库里不带，第一次用自己跑一遍克隆就行。
 
 ### 手动部署（不用 bat）
 
@@ -299,7 +301,7 @@ from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:8899/v1", api_key="not-needed")
 audio = client.audio.speech.create(
     model="qwen3-tts-gguf",
-    voice="巧克力",
+    voice="myvoice",  # 换成你自己克隆的音色名
     input="今晚吃什么？",
     response_format="mp3",
 )
@@ -316,7 +318,7 @@ engine = TTSEngine(model_dir="model-base")
 stream = engine.create_stream()
 
 # 设置音色（支持 .wav 路径、.json 路径或 TTSResult 对象）
-stream.set_voice("output/elaborate/sample.json")
+stream.set_voice("output/elaborate/myvoice.json")  # 需自行克隆生成
 
 # 配置推理参数
 config = TTSConfig(
