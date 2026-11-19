@@ -170,6 +170,8 @@ Pinned to **b10621**. Grab a prebuilt package from [llama.cpp Releases](https://
 | Windows (Vulkan) | `llama-b10621-bin-win-vulkan-x64.zip` |
 | Windows (CUDA) | `llama-b10621-bin-win-cuda-13.3-x64.zip` (also needs `cudart64_13.dll`, `cublas64_13.dll`) |
 
+Don't want to pick by hand? Double-click `setup.bat`: it detects your GPU and driver first — NVIDIA on driver 580+ gets CUDA 13.3, 550+ gets CUDA 12.4; AMD / Intel / iGPU gets the Vulkan build. If no CUDA runtime is present it fetches `cudart` too.
+
 **FFmpeg**
 
 Used for reading and transcoding audio; make sure `ffmpeg` is on `PATH`.

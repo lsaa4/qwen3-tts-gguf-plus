@@ -172,6 +172,8 @@ uv sync --extra gpu      # CUDA（N 卡，更快）
 | Windows (Vulkan) | `llama-b10621-bin-win-vulkan-x64.zip` |
 | Windows (CUDA) | `llama-b10621-bin-win-cuda-13.3-x64.zip`（另需 `cudart64_13.dll`、`cublas64_13.dll`） |
 
+不想手动挑就双击 `setup.bat`：它会先探测显卡和驱动版本，N 卡（驱动 580+ 选 CUDA 13.3，550+ 选 CUDA 12.4）自动下载对应包，A 卡 / I 卡 / 核显下载 Vulkan 包；本机没有 CUDA 运行时会连 `cudart` 一起补上。
+
 **FFmpeg**
 
 用于读写音频文件，装完确保 `ffmpeg` 在 PATH 里。
