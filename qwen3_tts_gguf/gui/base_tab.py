@@ -337,8 +337,8 @@ class TTSPageBase(ttkb.Frame):
                 elif kind == "play_done":
                     self._refresh_play_btn()
                 elif kind == "error":
-                    self.log_tab.append(f"❌ {ev[1]}")
-                    self.status_var.set(f"❌ {ev[1]}")  # 错误同时上状态栏，避免"没反应"
+                    self.log_tab.append(f"{ev[1]}")
+                    self.status_var.set(f"{ev[1]}")  # 错误同时上状态栏，避免"没反应"
         except queue.Empty:
             pass
         self.after(100, self._poll)
