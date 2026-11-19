@@ -53,7 +53,7 @@ def handle_decode_task(req: DecodeRequest, decoder, sessions, response_queue, re
             if req.task_id in sessions: del sessions[req.task_id]
             
     except Exception as e:
-        print(f"⚠️ [DecoderWorker] 解码异常: {e}")
+        print(f"[DecoderWorker] 解码异常: {e}")
         traceback.print_exc()
         if req.task_id in sessions: del sessions[req.task_id]
         response_queue.put(DecoderResponse(msg_type="FINISH", task_id=req.task_id))
@@ -69,7 +69,7 @@ def decoder_worker_proc(codes_queue, pcm_queue, decoder_onnx_path, onnx_provider
     
     decoder = StatefulDecoder(decoder_onnx_path, onnx_provider=onnx_provider, chunk_size=chunk_size)
     pcm_queue.put(DecoderResponse(msg_type="READY", task_id="decoder"))
-    print(f"🔊 [DecoderWorker] 已就绪 (Provider: {decoder.active_provider})")
+    print(f"[DecoderWorker] 已就绪 (Provider: {decoder.active_provider})")
     
     sessions = {} # {task_id: DecoderState}
 
@@ -93,6 +93,6 @@ def decoder_worker_proc(codes_queue, pcm_queue, decoder_onnx_path, onnx_provider
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f"❌ [DecoderWorker] 崩溃: {e}")
+        print(f"[DecoderWorker] 崩溃: {e}")
         import traceback
         traceback.print_exc()

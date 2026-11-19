@@ -78,7 +78,7 @@ def main():
     if voice and Path(voice).exists():
         stream.set_voice(voice)
     else:
-        print(f"⚠️ 参考音色不存在: {voice} (将用模型默认行为)", file=sys.stderr)
+        print(f"参考音色不存在: {voice} (将用模型默认行为)", file=sys.stderr)
 
     cfg = TTSConfig(max_steps=1024, temperature=args.temp, sub_temperature=args.temp,
                     seed=args.seed, sub_seed=args.seed + 3, streaming=False)
@@ -98,7 +98,7 @@ def main():
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     result.save(out)
 
-    print(f"✅ {out}")
+    print(f"{out}")
     print(f"   音频 {dur:.2f}s | 生成 {gen:.2f}s | RTF {gen/dur if dur else 0:.3f} | 端到端 {time.time()-t0:.2f}s")
     stream.join()
     engine.shutdown()

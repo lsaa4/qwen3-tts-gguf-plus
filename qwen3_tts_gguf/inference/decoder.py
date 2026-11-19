@@ -101,7 +101,7 @@ class StatefulDecoder:
         # 用虚假的历史和code预热
         warmup_codes = np.zeros((self.chunk_size, 16), dtype=np.int64)
         self.decode(warmup_codes, state=self.create_state(72), is_final=True)
-        logger.info(f"✅ [Decoder] 已就绪 ({self.active_provider}), 精度: {self.dtype.__name__}")
+        logger.info(f"[Decoder] 已就绪 ({self.active_provider}), 精度: {self.dtype.__name__}")
         
     
     def create_state(self, hostory_num = 0):

@@ -24,7 +24,7 @@ def main():
     device = "cpu"
     
     # 2. 加载原始模型
-    print("🚀 正在加载模型...")
+    print("正在加载模型...")
     tokenizer_load_path = os.path.join(MODEL_DIR, "speech_tokenizer") if os.path.exists(os.path.join(MODEL_DIR, "speech_tokenizer")) else MODEL_DIR
     model = Qwen3TTSTokenizerV2Model.from_pretrained(tokenizer_load_path).to(device)
     
@@ -97,7 +97,7 @@ def main():
     
     # 7. 执行联合导出
     onnx_path = os.path.join(EXPORT_DIR, ONNX_FILENAME)
-    print(f"📦 正在使用 dynamo=True 执行 Decoder 全量联合导出: {onnx_path}")
+    print(f"正在使用 dynamo=True 执行 Decoder 全量联合导出: {onnx_path}")
     
     try:
         with torch.no_grad():
@@ -113,10 +113,10 @@ def main():
             )
         
         file_size = os.path.getsize(onnx_path) / 1024 / 1024
-        print(f"✅ ONNX 导出成功！文件大小: {file_size:.2f} MB")
+        print(f"ONNX 导出成功！文件大小: {file_size:.2f} MB")
         
     except Exception as e:
-        print(f"❌ 导出失败: {e}")
+        print(f"导出失败: {e}")
         import traceback
         traceback.print_exc()
 

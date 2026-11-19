@@ -71,7 +71,7 @@ class AssetsManager:
                 # 0.6B 模式：直接使用（已经是 1024 维度）
                 self.emb_tables_1024.append(table)
             
-        logger.info(f"✅ [Assets] 资产加载完成 (Codec 表数量: {len(self.emb_tables)})")
+        logger.info(f"[Assets] 资产加载完成 (Codec 表数量: {len(self.emb_tables)})")
 
     def get_text_embedding(self, token_id: int) -> np.ndarray:
         return self.text_table[token_id]

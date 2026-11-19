@@ -5125,7 +5125,7 @@ class InternLM2Model(TextModel):
             if text == b"\x00":
                 # (TODO): fixme
                 # Hack here and replace the \x00 characters.
-                logger.warning(f"InternLM2 convert token '{text}' to '🐉'!")
+                logger.warning(f"InternLM2 convert token '{text}' to ''!")
                 text = "🐉".encode("utf-8")
 
             toktype = SentencePieceTokenTypes.NORMAL

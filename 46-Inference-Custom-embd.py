@@ -11,7 +11,7 @@ from qwen3_tts_gguf.inference import TTSEngine, TTSConfig, TTSResult
 def main():
     
     # 1. 初始化引擎
-    print(f"🚀 [Custom-Inference] 正在初始化引擎")
+    print(f"[Custom-Inference] 正在初始化引擎")
     engine = TTSEngine(model_dir="model-custom", onnx_provider='CUDA')
     stream = engine.create_stream()
     
@@ -41,7 +41,7 @@ def main():
     result.save(f"{save_path}.wav")
     result.save(f"{save_path}.json")
 
-    print(f"💾 已保存至: {save_path}.wav / .json")
+    print(f"已保存至: {save_path}.wav / .json")
 
     result.print_stats()
     stream.join()

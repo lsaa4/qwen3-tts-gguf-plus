@@ -112,7 +112,7 @@ def extract_talker_weights():
     with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-    print("\n✅ 提取完成!")
+    print("\n提取完成!")
     print(f"Talker 模型已保存至: {OUTPUT_DIR}")
 
 if __name__ == "__main__":

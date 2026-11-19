@@ -127,4 +127,4 @@ def speaker_worker_proc(play_queue, result_queue=None, sample_rate=24000):
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f"❌ [SpeakerWorker] 异常: {e}")
+        print(f"[SpeakerWorker] 异常: {e}")

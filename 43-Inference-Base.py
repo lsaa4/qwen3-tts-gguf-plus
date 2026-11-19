@@ -16,7 +16,7 @@ from qwen3_tts_gguf.inference import TTSEngine, TTSConfig, TTSResult
 def main():
 
     # 初始化引擎
-    print("🚀 [Base-Clone] 正在初始化 TTS 引擎...")
+    print("[Base-Clone] 正在初始化 TTS 引擎...")
     engine = TTSEngine(model_dir="model-base", onnx_provider="CUDA")
     stream = engine.create_stream()
 
@@ -36,14 +36,14 @@ def main():
     
     
     # if stream.voice:
-    #     print(f"🔊 正在还原并播放参考音频: {REF_JSON} ...")
+    #     print(f"正在还原并播放参考音频: {REF_JSON} ...")
     #     engine.decode(stream.voice)
     #     engine.encode(stream.voice)
     #     stream.voice.play(blocking=True)
     
 
     # 流式模式下，clone 依然会返回完整 result，但播放是并发进行的
-    print(f"\n🎙️  [2/2] 开始流式推理 (边推边播)...")
+    print(f"\n [2/2] 开始流式推理 (边推边播)...")
     target_text = "构造阶段增加8帧的零压预热推理，这将迫使推理引擎（如 DML）提前完成计算图的分配和显存优化，从而使第一次正式推理即处于最佳巅峰状态。"
     config = TTSConfig(
         max_steps=400, 

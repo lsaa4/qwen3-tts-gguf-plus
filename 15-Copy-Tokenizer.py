@@ -11,7 +11,7 @@ from export_config import MODEL_DIR, EXPORT_DIR
 def main():
     # 1. 检查源路径
     if not os.path.exists(MODEL_DIR):
-        print(f"❌ 模型目录不存在: {MODEL_DIR}")
+        print(f"模型目录不存在: {MODEL_DIR}")
         return
 
     # 2. 目标文件
@@ -32,7 +32,7 @@ def main():
         if hasattr(hf_tokenizer, "backend_tokenizer"):
             hf_tokenizer.backend_tokenizer.save(TARGET_FILE)
             file_size = os.path.getsize(TARGET_FILE) / 1024 / 1024
-            print(f"   ✅ 已合成单体 tokenizer.json ({file_size:.2f} MB)。")
+            print(f"   已合成单体 tokenizer.json ({file_size:.2f} MB)。")
         else:
             # 降级方案：保存到临时目录再移动
             temp_dir = os.path.join(EXPORT_DIR, "_temp_tok")
@@ -40,13 +40,13 @@ def main():
             src_json = os.path.join(temp_dir, "tokenizer.json")
             if os.path.exists(src_json):
                 shutil.move(src_json, TARGET_FILE)
-                print("   ✅ 已通过降级方案合成单体 tokenizer.json。")
+                print("   已通过降级方案合成单体 tokenizer.json。")
             shutil.rmtree(temp_dir, ignore_errors=True)
             
     except ImportError:
-        print("   ⚠️  未安装 transformers，无法合成单体 tokenizer.json。")
+        print("    未安装 transformers，无法合成单体 tokenizer.json。")
     except Exception as e:
-        print(f"   ⚠️  Tokenizer 转换失败: {e}")
+        print(f"    Tokenizer 转换失败: {e}")
 
 
 if __name__ == "__main__":

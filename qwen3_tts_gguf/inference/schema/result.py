@@ -197,9 +197,9 @@ class TTSResult:
         """播放音频结果"""
         if self.audio is None or len(self.audio) == 0:
             if len(self.codes) > 0:
-                logger.warning("⚠️ 此结果当前无音频数据，但检测到 Codec 特征。请先调用 .decode(engine.decoder) 进行解码渲染。")
+                logger.warning("此结果当前无音频数据，但检测到 Codec 特征。请先调用 .decode(engine.decoder) 进行解码渲染。")
             else:
-                logger.warning("⚠️ 此结果不包含音频数据，且无可用特征。")
+                logger.warning("此结果不包含音频数据，且无可用特征。")
             return
         import sounddevice as sd
         sd.play(self.audio, samplerate=SAMPLE_RATE, blocking=blocking)
@@ -214,17 +214,17 @@ class TTSResult:
         elif ext == ".json":
             self.save_json(path, **kwargs)
         else:
-            logger.error(f"❌ 不支持的保存格式: {ext}。请使用 .wav 或 .json")
+            logger.error(f"不支持的保存格式: {ext}。请使用 .wav 或 .json")
 
     def save_wav(self, path: str):
         """保存为 WAV 文件"""
         if self.audio is None:
-            logger.error("❌ 无音频数据，无法保存为 WAV。")
+            logger.error("无音频数据，无法保存为 WAV。")
             return
         import soundfile as sf
         os.makedirs(os.path.dirname(os.path.abspath(path)) or '.', exist_ok=True)
         sf.write(path, self.audio, SAMPLE_RATE)
-        logger.debug(f"💾 音频已保存: {path}")
+        logger.debug(f"音频已保存: {path}")
 
     def save_json(self, path: str, include_audio: bool = False, include_embeds: bool = False,
                   light: bool = False, info: Optional[str] = None):
@@ -233,7 +233,7 @@ class TTSResult:
             self.info = info
 
         if not self.is_valid_anchor:
-            logger.warning("⚠️ 当前结果不完整，无法保存为锚点。")
+            logger.warning("当前结果不完整，无法保存为锚点。")
             return
 
         # spk_emb 采用 fp32 + Base64 存储以节省空间，允许为 None
@@ -265,7 +265,7 @@ class TTSResult:
         """检测路径指向的 JSON 是否符合锚点格式，只返回 True/False，不抛异常"""
         # 1. 文件存在性
         if not os.path.exists(path):
-            logger.warning(f"⚠️ 找不到文件: {path}")
+            logger.warning(f"找不到文件: {path}")
             return False
 
         # 2. JSON 可解析性
@@ -273,30 +273,30 @@ class TTSResult:
             try:
                 data = json.load(f)
             except json.JSONDecodeError as e:
-                logger.warning(f"⚠️ 不是有效的 JSON 文件: {e} at {path}")
+                logger.warning(f"不是有效的 JSON 文件: {e} at {path}")
                 return False
 
         # 3. 必要字段存在性
         for key in ("text", "codes", "spk_emb", "text_ids"):
             if key not in data:
-                logger.warning(f"⚠️ 缺少必要字段 '{key}' at {path}")
+                logger.warning(f"缺少必要字段 '{key}' at {path}")
                 return False
 
         # 4. 类型与数值深度校验
         if not isinstance(data["text"], str):
-            logger.warning(f"⚠️ 'text' 必须是字符串 at {path}")
+            logger.warning(f"'text' 必须是字符串 at {path}")
             return False
 
         if not isinstance(data["text_ids"], list) or not all(isinstance(x, int) for x in data["text_ids"]):
-            logger.warning(f"⚠️ 'text_ids' 必须是整数列表 at {path}")
+            logger.warning(f"'text_ids' 必须是整数列表 at {path}")
             return False
 
         codes = data["codes"]
         if not isinstance(codes, list) or len(codes) == 0:
-            logger.warning(f"⚠️ 'codes' 必须是非空列表 at {path}")
+            logger.warning(f"'codes' 必须是非空列表 at {path}")
             return False
         if not isinstance(codes[0], list) or len(codes[0]) != 16 or not all(isinstance(x, int) for x in codes[0]):
-            logger.warning(f"⚠️ 'codes' 的每一帧必须包含 16 个整数 at {path}")
+            logger.warning(f"'codes' 的每一帧必须包含 16 个整数 at {path}")
             return False
 
         spk_data = data["spk_emb"]
@@ -304,20 +304,20 @@ class TTSResult:
             pass  # 音色设计模式等场景 spk_emb 可为空
         elif isinstance(spk_data, list):
             if len(spk_data) not in [1024, 2048]:
-                logger.warning(f"⚠️ 'spk_emb' 列表维度必须为 2048，实际为 {len(spk_data)} at {path}")
+                logger.warning(f"'spk_emb' 列表维度必须为 2048，实际为 {len(spk_data)} at {path}")
                 return False
         elif isinstance(spk_data, str):
             # Base64(fp16 bytes) → 解码后校验真实维度
             try:
                 spk_arr = np.frombuffer(base64.b64decode(spk_data), dtype=np.float32)
             except Exception as e:
-                logger.warning(f"⚠️ 'spk_emb' Base64 解码失败: {e} at {path}")
+                logger.warning(f"'spk_emb' Base64 解码失败: {e} at {path}")
                 return False
             if len(spk_arr) not in [1024, 2048]:
-                logger.warning(f"⚠️ 'spk_emb' 解码后维度错误: {len(spk_arr)}，期望 2048 at {path}")
+                logger.warning(f"'spk_emb' 解码后维度错误: {len(spk_arr)}，期望 2048 at {path}")
                 return False
         else:
-            logger.warning(f"⚠️ 'spk_emb' 格式应为 None/list/Base64 字符串 at {path}")
+            logger.warning(f"'spk_emb' 格式应为 None/list/Base64 字符串 at {path}")
             return False
 
         return True
@@ -326,7 +326,7 @@ class TTSResult:
     def from_json(cls, path: str) -> "TTSResult":
         """从 JSON 加载锚点（支持 Base64 和旧列表格式）；文件无效时记录日志并返回空结果"""
         if not cls._is_valid_json(path):
-            logger.warning(f"⚠️ 无法加载锚点，返回空 TTSResult: {path}")
+            logger.warning(f"无法加载锚点，返回空 TTSResult: {path}")
             return cls.empty()
 
         with open(path, 'r', encoding='utf-8') as f:
@@ -364,7 +364,7 @@ class TTSResult:
     def print_stats(self):
         """打印性能报告"""
         if self.stats is None:
-            logger.warning("⚠️ 当前结果无性能统计信息。")
+            logger.warning("当前结果无性能统计信息。")
             return
 
         s = self.stats

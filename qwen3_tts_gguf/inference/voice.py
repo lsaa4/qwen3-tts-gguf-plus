@@ -26,30 +26,30 @@ def prepare_voice(engine, tokenizer, source: Union[TTSResult, str, Path],
             p = Path(source)
             if p.suffix.lower() == ".json":
                 if not p.exists():
-                    logger.error(f"❌ 未找到音色 JSON 文件: {p}")
+                    logger.error(f"未找到音色 JSON 文件: {p}")
                     return None
                 res = TTSResult.from_json(str(p))
             elif p.suffix.lower() in AUDIO_EXTS:
                 res = _from_audio(engine, tokenizer, p, text or "")
             else:
-                logger.error(f"❌ 不支持的克隆源类型: {p.suffix}")
+                logger.error(f"不支持的克隆源类型: {p.suffix}")
                 return None
 
         if res is None or not _normalize(engine, res):
             return None
         return res
     except Exception as e:
-        logger.error(f"❌ 准备音色锚点时出现无法预料的异常: {e}")
+        logger.error(f"准备音色锚点时出现无法预料的异常: {e}")
         return None
 
 
 def _from_audio(engine, tokenizer, wav_path: Path, text: str) -> Optional[TTSResult]:
     """从音频文件提取音色特征 (codes + spk_emb)"""
     if engine.codec_encoder is None or engine.speaker_encoder is None:
-        logger.error("⚠️ 编码器模块未加载，无法执行音色克隆。")
+        logger.error("编码器模块未加载，无法执行音色克隆。")
         return None
 
-    logger.info(f"🎤 正在从音频提取音色特征: {wav_path.name}")
+    logger.info(f"正在从音频提取音色特征: {wav_path.name}")
     samples = load_audio(wav_path)
     if samples is None:
         return None
@@ -60,7 +60,7 @@ def _from_audio(engine, tokenizer, wav_path: Path, text: str) -> Optional[TTSRes
         return TTSResult(text=text, text_ids=tokenizer.encode(text).ids,
                          spk_emb=spk_emb, codes=codes)
     except Exception as e:
-        logger.error(f"❌ 音声特征提取失败: {e}")
+        logger.error(f"音声特征提取失败: {e}")
         return None
 
 
@@ -70,19 +70,19 @@ def _normalize(engine, res: TTSResult) -> bool:
         return False
 
     if res.spk_emb is None and len(res.codes) > 0:
-        logger.info("🎤 音色向量缺失，正在从 codes 解码音频并提取...")
+        logger.info("音色向量缺失，正在从 codes 解码音频并提取...")
         if res.audio is None:
             engine.decode(res)
         engine.encode(res)
 
     if res.spk_emb is not None and res.spk_emb.shape[-1] != engine.talker_model.n_embd:
-        logger.info(f"🔄 维度不匹配 ({res.spk_emb.shape[-1]}->{engine.talker_model.n_embd})，正在转换...")
+        logger.info(f"维度不匹配 ({res.spk_emb.shape[-1]}->{engine.talker_model.n_embd})，正在转换...")
         if res.audio is None:
             engine.decode(res)
         engine.encode(res)
 
     if engine.decoder and res.final_state is None and len(res.codes) > 0:
-        logger.info("🧠 缺少解码器上下文记忆 (final_state)，正在执行预解码以对齐记忆...")
+        logger.info("缺少解码器上下文记忆 (final_state)，正在执行预解码以对齐记忆...")
         engine.decode(res)
 
     return True

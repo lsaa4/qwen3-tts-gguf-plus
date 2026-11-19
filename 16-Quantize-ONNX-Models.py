@@ -23,9 +23,9 @@ def convert_to_fp16(input_path):
             op_block_list=['LayerNormalization', 'Softmax', 'Range'] 
         )
         onnx.save(model_fp16, output_path)
-        print(f"   ✅ [成功] 已保存 FP16 模型。")
+        print(f"   [成功] 已保存 FP16 模型。")
     except Exception as e:
-        print(f"   ❌ [失败] FP16 转换错误: {e}")
+        print(f"   [失败] FP16 转换错误: {e}")
 
 def convert_to_int8(input_path):
     output_path = input_path.replace(".fp32.onnx", ".int8.onnx")
@@ -40,9 +40,9 @@ def convert_to_int8(input_path):
             reduce_range=False,
             weight_type=QuantType.QUInt8
         )
-        print(f"   ✅ [成功] 已保存 INT8 模型。")
+        print(f"   [成功] 已保存 INT8 模型。")
     except Exception as e:
-        print(f"   ❌ [失败] INT8 量化错误: {e}")
+        print(f"   [失败] INT8 量化错误: {e}")
 
 def convert_to_int4(input_path):
     output_path = input_path.replace(".fp32.onnx", ".int4.onnx")
@@ -57,16 +57,16 @@ def convert_to_int4(input_path):
         )
         quantizer.process()
         quantizer.model.save_model_to_file(output_path)
-        print(f"   ✅ [成功] 已保存 INT4 模型。")
+        print(f"   [成功] 已保存 INT4 模型。")
     except Exception as e:
-        print(f"   ❌ [失败] INT4 量化错误: {e}")
+        print(f"   [失败] INT4 量化错误: {e}")
 
 def main():
     print("--- 正在开始针对 Qwen3-TTS ONNX 模型的批量量化/转换 ---")
     
     export_path = Path(EXPORT_DIR)
     if not export_path.exists():
-        print(f"❌ 错误: 目录 {export_path} 不存在。")
+        print(f"错误: 目录 {export_path} 不存在。")
         return
 
     # 定义目标文件列表
@@ -80,7 +80,7 @@ def main():
         model_path = str(export_path / filename)
         
         if not os.path.exists(model_path):
-            print(f"\n⚠️ 跳过: 找不到基准 FP32 模型: {filename}")
+            print(f"\n跳过: 找不到基准 FP32 模型: {filename}")
             continue
             
         print(f"\n>>> 处理模型: {filename}")

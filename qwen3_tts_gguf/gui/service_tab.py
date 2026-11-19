@@ -358,8 +358,8 @@ class ServiceTab(ttkb.Frame):
                 elif kind == "started":
                     self._on_started(ev[1])
                 elif kind == "error":
-                    self.log_tab.append(f"❌ {ev[1]}")
-                    self.status_var.set(f"❌ {ev[1]}")
+                    self.log_tab.append(f"{ev[1]}")
+                    self.status_var.set(f"{ev[1]}")
         except queue.Empty:
             pass
         self.after(100, self._poll)

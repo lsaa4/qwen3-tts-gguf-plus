@@ -18,7 +18,7 @@ from qwen3_tts_gguf.inference import TTSEngine, TTSConfig, TTSResult
 def main():
 
     # 初始化引擎
-    print("🚀 [Base-Clone] 正在初始化 TTS 引擎...")
+    print("[Base-Clone] 正在初始化 TTS 引擎...")
     engine = TTSEngine(model_dir="model-base", onnx_provider="CUDA")
     stream = engine.create_stream()
 

@@ -32,15 +32,15 @@ def main():
     # 特征文件路径
     JSON_PATH = ROOT_DIR / "output" / "sample.json"
     if not JSON_PATH.exists():
-        print(f"❌ 找不到特征文件: {JSON_PATH}")
+        print(f"找不到特征文件: {JSON_PATH}")
         return
 
     # 1. 加载 GGUF 引擎保存出来的 JSON 特征 (作为音色注入源)
-    print(f"📖 [Load] 正在从 {JSON_PATH.name} 加载音色和语义特征...")
+    print(f"[Load] 正在从 {JSON_PATH.name} 加载音色和语义特征...")
     ref_result = TTSResult.from_json(str(JSON_PATH))
     
     # 2. 加载官方模型
-    print(f"🚀 [Model] 正在负载基础模型: {MODEL_DIR}")
+    print(f"[Model] 正在负载基础模型: {MODEL_DIR}")
     try:
         # 定义数据类型
         dtype = torch.bfloat16
@@ -65,7 +65,7 @@ def main():
         ref_codes = torch.from_numpy(ref_result.codes).to(device=device, dtype=torch.long)
         ref_spk_emb = torch.from_numpy(ref_result.spk_emb).to(device=device, dtype=dtype)
         
-        print(f"💉 [Inject] 准备注入特征:")
+        print(f"[Inject] 准备注入特征:")
         print(f"   - 参考文本: {ref_result.text}")
         print(f"   - Codes 形状: {ref_codes.shape}")
 
@@ -98,7 +98,7 @@ def main():
         res.save_json(f"{output_base}.json")
         res.save_wav(f"{output_base}.wav")
         
-        print(f"✅ 生成成功！注入生成的结果已保存至: {output_base}.*")
+        print(f"生成成功！注入生成的结果已保存至: {output_base}.*")
         res.play()
 
     except Exception as e:

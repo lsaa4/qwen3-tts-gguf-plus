@@ -38,14 +38,14 @@ def create_zero_tokenizer():
 
     with open(os.path.join(TARGET_DIR, "vocab.json"), "w", encoding="utf-8") as f:
         json.dump(vocab, f, ensure_ascii=False)
-    print(f"  ✓ 已保存 vocab.json (大小: {len(vocab)})")
+    print(f"  已保存 vocab.json (大小: {len(vocab)})")
 
     # 2. 构造 BPE 合并规则 (merges.txt)
     print("[2/4] 正在生成极简 merges.txt...")
     with open(os.path.join(TARGET_DIR, "merges.txt"), "w", encoding="utf-8") as f:
         f.write("#version: 0.2\n")
         f.write("a b\n")
-    print(f"  ✓ 已保存 merges.txt")
+    print(f"  已保存 merges.txt")
 
     # 3. 构造配置 (tokenizer_config.json)
     print("[3/4] 正在生成 tokenizer_config.json...")
@@ -67,7 +67,7 @@ def create_zero_tokenizer():
     }
     with open(os.path.join(TARGET_DIR, "tokenizer_config.json"), "w", encoding="utf-8") as f:
         json.dump(tokenizer_config, f, indent=2, ensure_ascii=False)
-    print(f"  ✓ 已保存 tokenizer_config.json")
+    print(f"  已保存 tokenizer_config.json")
 
     # 4. 构造完整结构 (tokenizer.json)
     print("[4/4] 正在生成 tokenizer.json...")
@@ -92,9 +92,9 @@ def create_zero_tokenizer():
     }
     with open(os.path.join(TARGET_DIR, "tokenizer.json"), "w", encoding="utf-8") as f:
         json.dump(tokenizer_json, f, ensure_ascii=False)
-    print(f"  ✓ 已保存 tokenizer.json")
+    print(f"  已保存 tokenizer.json")
 
-    print(f"\n✅ 零基分词器创建完成！")
+    print(f"\n零基分词器创建完成！")
 
 if __name__ == "__main__":
     create_zero_tokenizer()

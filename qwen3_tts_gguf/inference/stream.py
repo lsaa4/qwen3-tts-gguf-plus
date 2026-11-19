@@ -84,7 +84,7 @@ class TTSStream:
             TTSResult 对象，包含完整音频、特征码及性能统计。
         """
         if self.voice is None:
-            logger.error("❌ 尚未设定音色锚点，请先调用 set_voice()。")
+            logger.error("尚未设定音色锚点，请先调用 set_voice()。")
             return None
             
         cfg = config or TTSConfig()
@@ -101,8 +101,8 @@ class TTSStream:
             
             return self._post_process(text, pdata, lout)
         except Exception as e:
-            logger.error(f"❌ Clone 推理失败: {e}", exc_info=True)
-            print(f"❌ Clone 推理失败: {e}")
+            logger.error(f"Clone 推理失败: {e}", exc_info=True)
+            print(f"Clone 推理失败: {e}")
             return None
 
     def custom(self,
@@ -143,7 +143,7 @@ class TTSStream:
             lout = self._run_engine_loop(pdata, timing, cfg)
             return self._post_process(text, pdata, lout)
         except Exception as e:
-            logger.error(f"❌ Custom 推理失败: {e}", exc_info=True)
+            logger.error(f"Custom 推理失败: {e}", exc_info=True)
             return None
 
     def design(self,
@@ -180,7 +180,7 @@ class TTSStream:
             lout = self._run_engine_loop(pdata, timing, cfg)
             return self._post_process(text, pdata, lout)
         except Exception as e:
-            logger.error(f"❌ Design 推理失败: {e}", exc_info=True)
+            logger.error(f"Design 推理失败: {e}", exc_info=True)
             return None
 
     def tts(self, *args, **kwargs):
@@ -399,25 +399,25 @@ class TTSStream:
             if res is None:
                 return False
             self.voice = res
-            logger.info(f"🎭 音色已切换为: {res.text[:20]}...")
+            logger.info(f"音色已切换为: {res.text[:20]}...")
             return res
         except Exception as e:
-            logger.error(f"❌ 设置音色时出现无法预料的异常: {e}")
+            logger.error(f"设置音色时出现无法预料的异常: {e}")
             return False
 
     def set_voice_from_speaker(self, speaker_id: str, text: str, **kwargs) -> Optional[TTSResult]:
         """从内置说话人生成音色锚点并设置"""
         try:
-            logger.info(f"📍 正在从内置说话人初始化音色核心: {speaker_id}")
+            logger.info(f"正在从内置说话人初始化音色核心: {speaker_id}")
             # kwargs 包含 language, streaming 等
             res = self.custom(text, speaker_id, **kwargs)
             if res:
                 prepared = prepare_voice(self.engine, self.tokenizer, res)
                 if prepared is not None:
                     self.voice = prepared
-                    logger.info(f"🎭 音色已切换为: {prepared.text[:20]}...")
+                    logger.info(f"音色已切换为: {prepared.text[:20]}...")
                 return res
             return None
         except Exception as e:
-            logger.error(f"❌ 内置音色初始化失败: {e}")
+            logger.error(f"内置音色初始化失败: {e}")
             return None

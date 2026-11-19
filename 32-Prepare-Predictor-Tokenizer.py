@@ -39,7 +39,7 @@ def create_predictor_tokenizer():
     with open(os.path.join(TARGET_DIR, "tokenizer_config.json"), "w", encoding="utf-8") as f:
         json.dump({"tokenizer_class": "Qwen2Tokenizer"}, f)
         
-    print(f"✅ Predictor 假分词器构造完成: {TARGET_DIR}")
+    print(f"Predictor 假分词器构造完成: {TARGET_DIR}")
 
 if __name__ == "__main__":
     create_predictor_tokenizer()
