@@ -53,12 +53,19 @@ hiddenimports = [
     "windnd",
 ]
 
-# bin 不入 git, 清空后从 ref/ 下的 zip 解压出对应变体的 llama.cpp DLL
-if BIN_DIR.exists():
-    shutil.rmtree(BIN_DIR)
-print(f"[{VARIANT}] 解压 {LLAMA_ZIP} -> {BIN_DIR}")
-with zipfile.ZipFile(ROOT / "ref" / LLAMA_ZIP) as zf:
-    zf.extractall(BIN_DIR)
+# bin 不入 git, 优先从 ref/ 下的 zip 解压出对应变体的 llama.cpp DLL;
+# ref 里没有 zip 时复用现存 bin/ (只要里面有本变体的 ggml 后端 DLL)
+LLAMA_ZIP_PATH = ROOT / "ref" / LLAMA_ZIP
+if LLAMA_ZIP_PATH.exists():
+    if BIN_DIR.exists():
+        shutil.rmtree(BIN_DIR)
+    print(f"[{VARIANT}] 解压 {LLAMA_ZIP} -> {BIN_DIR}")
+    with zipfile.ZipFile(LLAMA_ZIP_PATH) as zf:
+        zf.extractall(BIN_DIR)
+elif (BIN_DIR / "ggml-vulkan.dll").exists():
+    print(f"[{VARIANT}] ref 无 {LLAMA_ZIP}, 复用现存 bin/")
+else:
+    raise SystemExit(f"缺少 {LLAMA_ZIP_PATH} 且 bin/ 无 ggml-vulkan.dll, 无法构建 vulkan 版")
 
 a = Analysis(
     ["52-GUI.py"],
@@ -66,7 +73,13 @@ a = Analysis(
     binaries=[],
     datas=collect_data_files("ttkbootstrap"),  # 主题资源 (assets/)
     hiddenimports=hiddenimports,
-    excludes=["qwen3_tts_gguf"],
+    excludes=[
+        # 以下只有导出/量化脚本 (1x/2x) 用得到, 发行包不含这些流程
+        "torch", "torchvision", "torchaudio", "transformers", "accelerate",
+        "onnx", "onnxscript", "einops", "sentencepiece",
+        "sklearn", "matplotlib", "pandas", "tensorflow", "IPython",
+        "notebook", "jupyter", "pytest",
+    ],
     noarchive=False,
 )
 
@@ -92,6 +105,9 @@ coll = COLLECT(
 )
 
 for dest, target in JUNCTIONS:
+    if not target.exists():
+        print(f"跳过 junction (目标不存在): {target}")
+        continue
     link = DIST_DIR / dest
     if os.path.lexists(link):
         if not os.path.isjunction(link):
