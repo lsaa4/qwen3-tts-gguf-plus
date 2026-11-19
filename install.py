@@ -31,10 +31,26 @@ ROOT = Path(__file__).resolve().parent
 
 PY_MIN = (3, 14)                     # pyproject: requires-python >= 3.14
 LLAMA_TAG = "b10621"
-LLAMA_ZIP = f"llama-{LLAMA_TAG}-bin-win-vulkan-x64.zip"
-LLAMA_URL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_TAG}/{LLAMA_ZIP}"
+LLAMA_REL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_TAG}"
+
+# 后端 -> (包名后缀, 显示名, 约多少 MB)；按显卡自动挑一个
+LLAMA_BACKENDS = {
+    "vulkan": ("bin-win-vulkan-x64.zip", "Vulkan", 33),
+    "cuda-12.4": ("bin-win-cuda-12.4-x64.zip", "CUDA 12.4", 239),
+    "cuda-13.3": ("bin-win-cuda-13.3-x64.zip", "CUDA 13.3", 140),
+}
+# CUDA 包不自带 cublas/cudart，本机没装 CUDA 运行时才补这个
+LLAMA_CUDART = {
+    "cuda-12.4": ("cudart-llama-bin-win-cuda-12.4-x64.zip", 373),
+    "cuda-13.3": ("cudart-llama-bin-win-cuda-13.3-x64.zip", 373),
+}
+
 LLAMA_DIR = ROOT / "qwen3_tts_gguf" / "inference" / "bin"
 LLAMA_FILES = ["llama.dll", "ggml.dll", "llama-server.exe"]
+
+# 默认（Vulkan）包，hint 文案里引用
+LLAMA_ZIP = f"llama-{LLAMA_TAG}-{LLAMA_BACKENDS['vulkan'][0]}"
+LLAMA_URL = f"{LLAMA_REL}/{LLAMA_ZIP}"
 
 FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 FFMPEG_DIR = ROOT / "vendor" / "ffmpeg"
@@ -158,6 +174,91 @@ def venv_python() -> Path:
     return ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
+# ---------------------------------------------------------------- 设备探测
+
+_GPU = None
+
+
+def _ps(cmd, timeout=20):
+    r = run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd], timeout=timeout)
+    return r.stdout.strip() if r and r.returncode == 0 else ""
+
+
+def has_cuda_runtime() -> bool:
+    """本机是否已有 cublas/cudart，有就不用再下 373 MB 的 cudart 包。"""
+    if os.environ.get("CUDA_PATH"):
+        return True
+    names = ("cublas64_13.dll", "cublas64_12.dll", "cublasLt64_13.dll", "cublasLt64_12.dll")
+    if any(shutil.which(n) for n in names):
+        return True
+    sysdir = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32"
+    return any((sysdir / n).exists() for n in names)
+
+
+def detect_gpu():
+    """探测显卡和驱动，决定装哪个 llama.cpp 后端。
+
+    返回 {"vendor","name","driver","backend","reason"}，
+    backend 取 vulkan / cuda-12.4 / cuda-13.3。结果会缓存，探测失败一律退回 Vulkan。
+    """
+    global _GPU
+    if _GPU is not None:
+        return _GPU
+
+    info = {"vendor": "unknown", "name": "", "driver": "", "backend": "vulkan", "reason": ""}
+
+    # 1) nvidia-smi 最准：卡名和驱动版本一次拿全
+    smi = shutil.which("nvidia-smi")
+    if not smi:
+        cand = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "nvidia-smi.exe"
+        smi = str(cand) if cand.exists() else None
+    if smi:
+        r = run([smi, "--query-gpu=name,driver_version", "--format=csv,noheader"], timeout=20)
+        if r and r.returncode == 0 and r.stdout.strip():
+            line = r.stdout.strip().splitlines()[0]
+            name, _, drv = (x.strip() for x in line.partition(","))
+            info.update(vendor="nvidia", name=name, driver=drv)
+            m = re.match(r"(\d+)", drv)
+            major = int(m.group(1)) if m else 0
+            if major >= 580:
+                info.update(backend="cuda-13.3", reason="N 卡 + 驱动 580 及以上")
+            elif major >= 550:
+                info.update(backend="cuda-12.4", reason="N 卡 + 驱动 550 及以上")
+            else:
+                info["reason"] = "N 卡但驱动偏旧，退回 Vulkan"
+            _GPU = info
+            return info
+
+    # 2) 退回 WMI 列显卡名
+    names = _ps("(Get-CimInstance Win32_VideoController).Name -join '|'")
+    names = [n.strip() for n in names.split("|") if n.strip()]
+    # 展示时优先挑真卡，别把串流/虚拟显示器当成显卡
+    real = [n for n in names
+            if not re.search(r"virtual|basic display|remote|parsec|gameviewer|idd", n, re.I)]
+    info["name"] = (real or names or [""])[0]
+    low = " ".join(names).lower()
+    if "nvidia" in low:
+        info.update(vendor="nvidia", backend="cuda-12.4",
+                    reason="识别到 N 卡，取不到驱动版本，按 CUDA 12.4 装")
+    elif "amd" in low or "radeon" in low:
+        info.update(vendor="amd", reason="A 卡走 Vulkan + DirectML")
+    elif "intel" in low or "arc" in low:
+        info.update(vendor="intel", reason="I 卡走 Vulkan + DirectML")
+    else:
+        info["reason"] = "没识别到独显，用通用的 Vulkan"
+    _GPU = info
+    return info
+
+
+def bin_backend() -> str:
+    """看 bin 里现在装的是哪个后端。"""
+    if (LLAMA_DIR / "ggml-cuda.dll").exists():
+        return "cuda"
+    if (LLAMA_DIR / "ggml-vulkan.dll").exists():
+        return "vulkan"
+    return ""
+
+
 def check_python():
     ver = sys.version_info
     got = f"{ver.major}.{ver.minor}.{ver.micro}"
@@ -216,13 +317,24 @@ def check_packages():
 
 
 def check_llama():
+    g = detect_gpu()
+    be = g["backend"] if g["backend"] in LLAMA_BACKENDS else "vulkan"
     missing = [f for f in LLAMA_FILES if not (LLAMA_DIR / f).exists()]
-    if not missing:
-        size = sum(p.stat().st_size for p in LLAMA_DIR.glob("*.dll")) / 2**20
-        return Result("llama", OK, "llama.cpp 运行库", f"{LLAMA_DIR.relative_to(ROOT)}  共 {size:.0f} MB")
-    return Result("llama", FAIL, "llama.cpp 运行库",
-                  f"缺 {', '.join(missing)}" if LLAMA_DIR.exists() else "目录不存在",
-                  f"运行本脚本自动下载，或手动解压 {LLAMA_ZIP} 到 {LLAMA_DIR.relative_to(ROOT)}")
+    if missing:
+        zipname = f"llama-{LLAMA_TAG}-{LLAMA_BACKENDS[be][0]}"
+        return Result("llama", FAIL, "llama.cpp 运行库",
+                      f"缺 {', '.join(missing)}" if LLAMA_DIR.exists() else "目录不存在",
+                      f"运行本脚本自动下载 {zipname} 到 {LLAMA_DIR.relative_to(ROOT)}")
+    size = sum(p.stat().st_size for p in LLAMA_DIR.glob("*.dll")) / 2**20
+    cur = bin_backend()
+    detail = f"{LLAMA_DIR.relative_to(ROOT)}  {size:.0f} MB  后端 {cur or '未知'}"
+    want = "cuda" if be.startswith("cuda") else "vulkan"
+    if cur and cur != want:
+        # 能跑就别动，只提示可以换更快的那版
+        return Result("llama-opt", WARN, "llama.cpp 运行库", detail,
+                      f"检测到 {g['name'] or g['vendor']}，换成 {LLAMA_BACKENDS[be][1]} 版会更快；"
+                      f"想换就删掉 {LLAMA_DIR.relative_to(ROOT)} 后重跑本脚本")
+    return Result("llama", OK, "llama.cpp 运行库", detail)
 
 
 def check_model():
@@ -352,14 +464,17 @@ def fix_venv():
     if not py.exists():
         uv = shutil.which("uv")
         if uv:
-            say(C.dim("  用 uv sync --extra dml 建环境（首次约 1-3 分钟）…"))
+            say(C.dim("  用 uv sync 建环境（首次约 1-3 分钟）…"))
             extra = "dml"
-            say(C.dim("  想用 CUDA：选 n，然后重跑。"))
+            gpu = detect_gpu()
+            want_cuda = gpu["backend"].startswith("cuda")
+            if want_cuda:
+                say(C.dim(f"  检测到 {gpu['name'] or 'NVIDIA 显卡'}，建议用 CUDA"))
             try:
-                ans = input("  用 N 卡 CUDA 加速吗？(y/N) ").strip().lower()
+                ans = input(f"  用 N 卡 CUDA 加速吗？({'Y/n' if want_cuda else 'y/N'}) ").strip().lower()
             except EOFError:
-                ans = ""
-            if ans in ("y", "yes"):
+                ans = "y" if want_cuda else ""
+            if ans in ("y", "yes") or (ans == "" and want_cuda):
                 extra = "cuda"
             r = run([uv, "sync", "--extra", extra], cwd=str(ROOT), timeout=1800)
             if r and r.returncode == 0:
@@ -398,12 +513,40 @@ def fix_venv():
 
 
 def fix_llama():
-    tmp = ROOT / ".cache" / LLAMA_ZIP
+    g = detect_gpu()
+    be = g["backend"] if g["backend"] in LLAMA_BACKENDS else "vulkan"
+    suffix, label, mb = LLAMA_BACKENDS[be]
+    zipname = f"llama-{LLAMA_TAG}-{suffix}"
+    url = f"{LLAMA_REL}/{zipname}"
+    say(C.dim(f"  设备：{g['name'] or '未识别'}（{g['reason'] or '默认'}）-> {label} 后端"))
+
+    # CUDA 包不含 cublas/cudart，本机没有 CUDA 运行时就顺手补一份
+    cudart = None
+    if be.startswith("cuda") and not has_cuda_runtime():
+        crt, crt_mb = LLAMA_CUDART[be]
+        say(C.dim(f"  本机没装 CUDA 运行时，需要额外下载 {crt}（~{crt_mb} MB）"))
+        cudart = (f"{LLAMA_REL}/{crt}", ROOT / ".cache" / crt, crt_mb)
+
+    tmp = ROOT / ".cache" / zipname
     if not tmp.exists():
-        _download(LLAMA_URL, tmp, f"llama.cpp {LLAMA_TAG} Vulkan (~120 MB)")
+        _download(url, tmp, f"llama.cpp {LLAMA_TAG} {label}（~{mb} MB）")
     else:
         say(C.dim(f"  复用已下载的 {tmp.name}"))
+
+    # 换后端前先清掉旧的 ggml 后端 dll，别让 CUDA 和 Vulkan 混在一起
+    if LLAMA_DIR.exists():
+        for p in LLAMA_DIR.glob("ggml-*.dll"):
+            try:
+                p.unlink()
+            except OSError:
+                pass
+
     n = _extract_bin(tmp, LLAMA_DIR)
+    if cudart:
+        cu, path, cmb = cudart
+        if not path.exists():
+            _download(cu, path, f"CUDA 运行库 cudart（~{cmb} MB）")
+        n += _extract_bin(path, LLAMA_DIR)
     say(C.dim(f"  解压 {n} 个文件到 {LLAMA_DIR.relative_to(ROOT)}"))
     return all((LLAMA_DIR / f).exists() for f in LLAMA_FILES)
 
@@ -445,6 +588,11 @@ def main():
 
     say(C.bold("Qwen3-TTS GGUF 环境检查"))
     say(C.dim(f"目录 {ROOT}"))
+    if not args.quiet:
+        g = detect_gpu()
+        be = LLAMA_BACKENDS.get(g["backend"], (None, "Vulkan", 0))[1]
+        say(C.dim(f"设备 {g['name'] or '未识别'}  驱动 {g['driver'] or '-'}  "
+                  f"计划后端 {be}（{g['reason'] or '默认'}）"))
 
     results = gather()
     nfail = print_report(results, quiet=args.quiet)
@@ -470,7 +618,10 @@ def main():
         need_fix = r.key in ("venv", "packages", "llama", "ffmpeg")
         if not need_fix:
             say()
-            say(C.warn(f"{r.title} 需要你手动处理："))
+            if r.level == WARN:
+                say(C.warn(f"{r.title}："))
+            else:
+                say(C.warn(f"{r.title} 需要你手动处理："))
             say(f"  {r.hint}")
             continue
         if not args.yes:
