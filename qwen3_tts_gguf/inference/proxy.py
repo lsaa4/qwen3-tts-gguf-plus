@@ -100,7 +100,7 @@ class DecoderProxy:
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"⚠️ [Proxy] 监听异常: {e}")
+                print(f"[Proxy] 监听异常: {e}")
                 import traceback
                 traceback.print_exc()
                 break

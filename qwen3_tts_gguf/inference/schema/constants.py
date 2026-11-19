@@ -58,7 +58,7 @@ def map_speaker(spk) -> int:
         # 即使是数字，也要验证区间
         if 2800 <= spk <= 3071:
             return spk
-        logger.warning(f"⚠️ 非法的 Speaker ID: {spk}, 必须在 2800-3071 之间。回退到默认对齐 Vivian (3065)")
+        logger.warning(f"非法的 Speaker ID: {spk}, 必须在 2800-3071 之间。回退到默认对齐 Vivian (3065)")
         return None
     
     return SPEAKER_MAP.get(str(spk).lower(), None)
@@ -68,7 +68,7 @@ def map_language(lang) -> int:
     if isinstance(lang, int):
         if 2048 <= lang <= 2147:
             return lang
-        logger.warning(f"⚠️ 非法的 Language ID: {lang}, 必须在 2048-2147 之间。回退到 Chinese (2055)")
+        logger.warning(f"非法的 Language ID: {lang}, 必须在 2048-2147 之间。回退到 Chinese (2055)")
         return None
         
     return LANGUAGE_MAP.get(str(lang).lower(), None)

@@ -26,7 +26,7 @@ class CodecEncoder:
         self.dtype = np.float16 if "float16" in input_info.type else np.float32
         
         self.active_provider = self.sess.get_providers()[0]
-        logger.info(f"✅ [CodecEncoder] 已就绪 ({self.active_provider}), 精度: {self.dtype.__name__}")
+        logger.info(f"[CodecEncoder] 已就绪 ({self.active_provider}), 精度: {self.dtype.__name__}")
 
     def encode(self, wav: np.ndarray) -> np.ndarray:
         """
@@ -64,7 +64,7 @@ class SpeakerEncoder:
             sr=24000, n_fft=1024, hop_length=256, n_mels=128, fmin=0.0, fmax=12000.0
         )
         self.active_provider = self.sess.get_providers()[0]
-        logger.info(f"✅ [SpeakerEncoder] 已就绪 ({self.active_provider}), 精度: {self.dtype.__name__}")
+        logger.info(f"[SpeakerEncoder] 已就绪 ({self.active_provider}), 精度: {self.dtype.__name__}")
 
     def encode_audio(self, wav: np.ndarray) -> np.ndarray:
         """从音频提取 Speaker Embedding"""
@@ -88,7 +88,7 @@ class SpeakerEncoder:
         if isinstance(input, TTSResult):
             wav = input.audio
             if wav is None:
-                logger.warning("⚠️ TTSResult 中不包含音频数据，跳过特征提取过程。")
+                logger.warning("TTSResult 中不包含音频数据，跳过特征提取过程。")
                 return input.spk_emb
             spk_emb = self.encode_audio(wav)
             input.spk_emb = spk_emb

@@ -45,7 +45,7 @@ class TTSEngine:
                   if name in needed and not p.exists()]
         
         if missing:
-            logger.error(f"❌ 引擎初始化失败: 缺少核心模型文件 {missing}")
+            logger.error(f"引擎初始化失败: 缺少核心模型文件 {missing}")
             return
 
         try:
@@ -53,7 +53,7 @@ class TTSEngine:
             t_assets = time.time()
             self.assets = AssetsManager(str(self.model_dir))
             self.tokenizer = Tokenizer.from_file(str(self.paths['tokenizer']))
-            if verbose: print(f"📦 [Engine] 资产与词表加载完成 (耗时: {time.time()-t_assets:.2f}s)")
+            if verbose: print(f"[Engine] 资产与词表加载完成 (耗时: {time.time()-t_assets:.2f}s)")
             
             # 2. 音频及说话人编码器 (CPU 轻量型)
             self.codec_encoder = None
@@ -62,13 +62,13 @@ class TTSEngine:
                 t_enc = time.time()
                 self.codec_encoder = CodecEncoder(str(self.paths["codec_enc_onnx"]))
                 self.speaker_encoder = SpeakerEncoder(str(self.paths["spk_enc_onnx"]))
-                if verbose: print(f"🎤 [Engine] 编码器加载完成 (耗时: {time.time()-t_enc:.2f}s)")
+                if verbose: print(f"[Engine] 编码器加载完成 (耗时: {time.time()-t_enc:.2f}s)")
 
             # 3. 解码后端: 子进程 (流式播放场景) 或进程内 (GUI/离线批量场景)
             t_parallel = time.time()
             if subprocess_decoder:
                 self.decoder = DecoderProxy(str(self.paths["decoder_onnx"]), onnx_provider=onnx_provider, chunk_size=self.chunk_size)
-                if verbose: print("⏳ [Engine] 正在拉起子进程解码器...")
+                if verbose: print("[Engine] 正在拉起子进程解码器...")
             else:
                 from .decoder import LocalDecoder
                 self.decoder = LocalDecoder(str(self.paths["decoder_onnx"]), onnx_provider=onnx_provider, chunk_size=self.chunk_size)
@@ -77,7 +77,7 @@ class TTSEngine:
             if load_llm:
                 t_gguf = time.time()
                 self._init_llama_engines(llm_use_gpu)
-                if verbose: print(f"🧠 [Engine] GGUF 推理后端就绪 (耗时: {time.time()-t_gguf:.2f}s)")
+                if verbose: print(f"[Engine] GGUF 推理后端就绪 (耗时: {time.time()-t_gguf:.2f}s)")
             else:
                 self.talker_model = None
                 self.predictor_model = None
@@ -86,19 +86,19 @@ class TTSEngine:
             if subprocess_decoder:
                 is_decoder_ready = self.decoder.wait_until_ready(timeout=10)
                 if not is_decoder_ready:
-                    print(f"❌ [Engine] 引擎初始化未完全就绪 (解码器超时)。")
-                    logger.warning("⚠️ [Engine] 解码器就绪超时，渲染功能将不可用。")
+                    print(f"[Engine] 引擎初始化未完全就绪 (解码器超时)。")
+                    logger.warning("[Engine] 解码器就绪超时，渲染功能将不可用。")
                     self.ready = False
                     return
             self.ready = True
             if verbose:
                 mode = "子进程" if subprocess_decoder else "进程内"
-                print(f"✅ [Engine] 解码器就绪 ({mode}) (总并行初始化耗时: {time.time()-t_parallel:.2f}s)")
+                print(f"[Engine] 解码器就绪 ({mode}) (总并行初始化耗时: {time.time()-t_parallel:.2f}s)")
 
-            print(f"🚀 [Engine] 引擎全链路初始化完成! 总耗时: {time.time()-t_start:.2f}s")
+            print(f"[Engine] 引擎全链路初始化完成! 总耗时: {time.time()-t_start:.2f}s")
 
         except Exception as e:
-            logger.error(f"❌ 引擎初始化过程中出现致命异常: {e}", exc_info=True)
+            logger.error(f"引擎初始化过程中出现致命异常: {e}", exc_info=True)
             self.shutdown()
 
     def __bool__(self):
@@ -113,22 +113,22 @@ class TTSEngine:
             self.talker_model = llama.LlamaModel(self.paths["talker_gguf"], n_gpu_layers=-1, use_gpu=llm_use_gpu)
             self.predictor_model = llama.LlamaModel(self.paths["predictor_gguf"], n_gpu_layers=-1, use_gpu=llm_use_gpu)
             
-            logger.info("✅ [Engine] GGUF 模型加载完成。")
+            logger.info("[Engine] GGUF 模型加载完成。")
         except Exception as e:
-            logger.error(f"❌ 加载 GGUF 模型失败 (可能是显存不足/OOM): {e}")
+            logger.error(f"加载 GGUF 模型失败 (可能是显存不足/OOM): {e}")
             raise
 
     def create_stream(self, n_ctx=2048, voice_path: Optional[str] = None) -> Optional[TTSStream]:
         """工厂方法：创建语音流"""
         if not self.ready:
-            logger.error("❌ 引擎未就绪，无法创建语音流。")
+            logger.error("引擎未就绪，无法创建语音流。")
             return None
         return TTSStream(self, n_ctx=n_ctx, voice_path=voice_path)
 
     def encode(self, input) -> Optional[np.ndarray]:
         """快捷入口：提取音色特征 (Speaker Embedding)。支持传入 numpy 数组或 TTSResult。"""
         if self.speaker_encoder is None:
-            logger.error("❌ 本模型无 SpeakerEncoder")
+            logger.error("本模型无 SpeakerEncoder")
             return None
         return self.speaker_encoder.encode(input)
 
@@ -149,10 +149,10 @@ class TTSEngine:
                 self.talker_model = None
                 self.predictor_model = None
             except Exception as e:
-                logger.warning(f"⚠️ 关闭引擎时出现小异常 (忽略): {e}")
+                logger.warning(f"关闭引擎时出现小异常 (忽略): {e}")
             self.ready = False
             self._already_shutdown = True
-            logger.info("✅ [Engine] 引擎资源已彻底释放。")
+            logger.info("[Engine] 引擎资源已彻底释放。")
 
     def __del__(self):
         self.shutdown()
