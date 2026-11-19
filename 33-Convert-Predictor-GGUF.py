@@ -15,16 +15,16 @@ try:
     import convert_hf_to_gguf
     from convert_hf_to_gguf import TextModel, ModelBase
 except ImportError as e:
-    print(f"❌ Error importing convert_hf_to_gguf: {e}")
+    print(f"Error importing convert_hf_to_gguf: {e}")
     sys.exit(1)
 
 # 3. 定义补丁函数
 def patched_get_vocab_base_pre(self, tokenizer) -> str:
-    print(f"💉 [补丁] 拦截到 get_vocab_base_pre 调用。强制返回 'qwen2'。")
+    print(f"[补丁] 拦截到 get_vocab_base_pre 调用。强制返回 'qwen2'。")
     return "qwen2"
 
 def patched_load_hparams(dir_model: Path, is_mistral_format: bool):
-    print(f"💉 [补丁] 强制从 {dir_model / 'config.json'} 加载配置。")
+    print(f"[补丁] 强制从 {dir_model / 'config.json'} 加载配置。")
     with open(dir_model / "config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
     return config
@@ -69,10 +69,10 @@ def main():
     
     try:
         convert_hf_to_gguf.main()
-        print(f"\n✅ Predictor GGUF 转换成功!")
+        print(f"\nPredictor GGUF 转换成功!")
         print(f"输出路径: {GGUF_OUT}")
     except Exception as e:
-        print(f"\n❌ 转换失败: {e}")
+        print(f"\n转换失败: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

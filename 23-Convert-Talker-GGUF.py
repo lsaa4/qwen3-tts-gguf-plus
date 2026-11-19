@@ -26,7 +26,7 @@ try:
     from convert_hf_to_gguf import TextModel
     import gguf
 except ImportError as e:
-    print(f"❌ Error importing convert_hf_to_gguf: {e}")
+    print(f"Error importing convert_hf_to_gguf: {e}")
     sys.exit(1)
 
 
@@ -36,8 +36,8 @@ def patched_get_vocab_base_pre(self, tokenizer) -> str:
     Monkey Patch 替代函数。
     不进行任何哈希计算，直接返回 'qwen2'。
     """
-    print(f"💉 [补丁] 拦截到 get_vocab_base_pre 调用。")
-    print(f"💉 [补丁] 绕过哈希检查，强制返回 'qwen2'。")
+    print(f"[补丁] 拦截到 get_vocab_base_pre 调用。")
+    print(f"[补丁] 绕过哈希检查，强制返回 'qwen2'。")
     return "qwen2"
 
 def patched_load_hparams(dir_model: Path, is_mistral_format: bool):
@@ -45,8 +45,8 @@ def patched_load_hparams(dir_model: Path, is_mistral_format: bool):
     Monkey Patch 替代函数。
     强制从 config.json 加载参数，绕过 AutoConfig 的潜在远程代码加载和解析干扰。
     """
-    print(f"💉 [补丁] 拦截到 load_hparams 调用。")
-    print(f"💉 [补丁] 强制从 {dir_model / 'config.json'} 加载配置。")
+    print(f"[补丁] 拦截到 load_hparams 调用。")
+    print(f"[补丁] 强制从 {dir_model / 'config.json'} 加载配置。")
     
     if is_mistral_format:
         with open(dir_model / "params.json", "r", encoding="utf-8") as f:
@@ -57,7 +57,7 @@ def patched_load_hparams(dir_model: Path, is_mistral_format: bool):
         with open(dir_model / "config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
     except Exception as e:
-        print(f"❌ 加载配置文件失败: {e}")
+        print(f"加载配置文件失败: {e}")
         raise
 
     if "llm_config" in config:
@@ -86,7 +86,7 @@ def main():
     required_files = ["model.safetensors", "config.json", "tokenizer.json"]
     for f in required_files:
         if not os.path.exists(os.path.join(TALKER_MODEL_DIR, f)):
-            print(f"❌ 错误: 缺少必要文件 {f}，请制作模型后再运行。")
+            print(f"错误: 缺少必要文件 {f}，请制作模型后再运行。")
             sys.exit(1)
 
     # [步骤 B] 应用 Monkey Patch
@@ -132,10 +132,10 @@ def main():
     
     try:
         convert_hf_to_gguf.main()
-        print(f"\n✅ Talker GGUF 转换成功!")
+        print(f"\nTalker GGUF 转换成功!")
         print(f"输出路径: {GGUF_OUT}")
     except Exception as e:
-        print(f"\n❌ 转换过程中出现错误: {e}")
+        print(f"\n转换过程中出现错误: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -26,11 +26,11 @@ def extract_predictor_hf():
     has_projection = proj_key_w in weights
     
     if has_projection:
-        print("💡 检测到投影层 (1.7B 逻辑)")
+        print("检测到投影层 (1.7B 逻辑)")
         proj_w = weights[proj_key_w]
         proj_b = weights[proj_key_b]
     else:
-        print("💡 未检测到投影层 (0.6B 逻辑)")
+        print("未检测到投影层 (0.6B 逻辑)")
         proj_w = None
         proj_b = None
     
@@ -53,7 +53,7 @@ def extract_predictor_hf():
         i += 1
         
     if not emb_list:
-        print("❌ 未在权重中找到 Codec Embedding！")
+        print("未在权重中找到 Codec Embedding！")
         return
         
     cat_emb = torch.cat(emb_list, dim=0) 
@@ -70,7 +70,7 @@ def extract_predictor_hf():
         j += 1
     
     if not head_list:
-        print("❌ 未在权重中找到 LM Head！")
+        print("未在权重中找到 LM Head！")
         return
         
     cat_head = torch.cat(head_list, dim=0) 
@@ -135,9 +135,9 @@ def extract_predictor_hf():
     if has_projection:
         np.save(os.path.join(embedding_output_dir, "proj_weight.npy"), proj_w.float().numpy())
         np.save(os.path.join(embedding_output_dir, "proj_bias.npy"), proj_b.float().numpy())
-        print(f"📊 额外导出 Numpy 投影层资产至: {embedding_output_dir}")
+        print(f"额外导出 Numpy 投影层资产至: {embedding_output_dir}")
         
-    print(f"✅ Predictor HF 格式剥离完成: {output_dir}")
+    print(f"Predictor HF 格式剥离完成: {output_dir}")
 
 if __name__ == "__main__":
     extract_predictor_hf()

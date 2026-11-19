@@ -30,7 +30,7 @@ def main():
         speaker_encoder_module = tts.model.speaker_encoder
         
         if speaker_encoder_module is None:
-            print("❌ 该模型不包含 Speaker Encoder。")
+            print("该模型不包含 Speaker Encoder。")
             return
 
         # 3. 使用包装器准备导出
@@ -59,11 +59,11 @@ def main():
             do_constant_folding=True
         )
         
-        print(f"✅ Speaker Encoder 导出成功！")
+        print(f"Speaker Encoder 导出成功！")
         print(f"输出文件: {ONNX_PATH}")
 
     except Exception as e:
-        print(f"❌ 导出失败: {e}")
+        print(f"导出失败: {e}")
         import traceback
         traceback.print_exc()
 

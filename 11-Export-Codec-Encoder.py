@@ -68,10 +68,10 @@ def main():
             opset_version=18,  # 使用 opset 18，避免版本转换失败
             do_constant_folding=True
         )
-        print("✅ Encoder ONNX 导出成功！")
+        print("Encoder ONNX 导出成功！")
         
     except Exception as e:
-        logger.error(f"❌ Encoder ONNX 导出失败: {e}")
+        logger.error(f"Encoder ONNX 导出失败: {e}")
         import traceback
         traceback.print_exc()
         return

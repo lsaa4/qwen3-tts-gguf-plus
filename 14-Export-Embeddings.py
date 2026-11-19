@@ -17,7 +17,7 @@ def export_embeddings():
     print(f"[1/5] 正在从 {model_file} 加载权重 (safetensors 模式)...")
     
     if not model_file.exists():
-        print(f"❌ 未找到权重文件: {model_file}")
+        print(f"未找到权重文件: {model_file}")
         return
 
     weights = load_file(str(model_file))

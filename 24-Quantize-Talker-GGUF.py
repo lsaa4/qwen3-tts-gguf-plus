@@ -18,16 +18,16 @@ def main():
     print("---------------------------------------------------------")
     
     if not QUANTIZE_EXE.exists():
-        print(f"❌ 找不到量化工具: {QUANTIZE_EXE}")
+        print(f"找不到量化工具: {QUANTIZE_EXE}")
         return
         
     if not INPUT_MODEL.exists():
-        print(f"❌ 找不到输入模型，请先运行 23 脚本生成 f16 模型: {INPUT_MODEL}")
+        print(f"找不到输入模型，请先运行 23 脚本生成 f16 模型: {INPUT_MODEL}")
         return
         
-    print(f"🔹 输入模型: {INPUT_MODEL.name}")
-    print(f"🔹 输出模型: {OUTPUT_MODEL.name}")
-    print(f"🔹 量化类型: {QUANTIZE_TYPE}")
+    print(f"输入模型: {INPUT_MODEL.name}")
+    print(f"输出模型: {OUTPUT_MODEL.name}")
+    print(f"量化类型: {QUANTIZE_TYPE}")
     
     cmd = [
         str(QUANTIZE_EXE),
@@ -36,15 +36,15 @@ def main():
         QUANTIZE_TYPE
     ]
     
-    print(f"\n🚀 正在启动 llama-quantize.exe...")
+    print(f"\n正在启动 llama-quantize.exe...")
     try:
         subprocess.run(cmd, check=True)
-        print(f"\n✅ Talker {QUANTIZE_TYPE} 量化成功！")
-        print(f"📁 产物保存在: {OUTPUT_MODEL}")
+        print(f"\nTalker {QUANTIZE_TYPE} 量化成功！")
+        print(f"产物保存在: {OUTPUT_MODEL}")
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ 量化失败，错误码: {e.returncode}")
+        print(f"\n量化失败，错误码: {e.returncode}")
     except Exception as e:
-        print(f"\n❌ 执行时发生未知错误: {e}")
+        print(f"\n执行时发生未知错误: {e}")
 
 if __name__ == '__main__':
     main()
