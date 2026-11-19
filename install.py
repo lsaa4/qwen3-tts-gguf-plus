@@ -260,15 +260,35 @@ def bin_backend() -> str:
 
 
 def check_python():
+    """系统 Python 只负责跑本脚本；真正干活的是 .venv 里的解释器。"""
     ver = sys.version_info
     got = f"{ver.major}.{ver.minor}.{ver.micro}"
+
+    # .venv 已达标就以它为准，系统 Python 旧一点不影响使用
+    venv_ver = ""
+    py = venv_python()
+    if py.exists():
+        r = run([str(py), "-V"], timeout=60)
+        if r and r.returncode == 0:
+            txt = (r.stdout or r.stderr or "").strip()
+            m = re.search(r"(\d+)\.(\d+)", txt)
+            if m:
+                venv_ver = txt.replace("Python ", "")
+                if (int(m.group(1)), int(m.group(2))) >= PY_MIN:
+                    return Result("python", OK, "Python 版本", f"系统 {got}，.venv {venv_ver}")
+
     if (ver.major, ver.minor) >= PY_MIN:
         return Result("python", OK, "Python 版本", f"{got} ({sys.executable})")
-    return Result(
-        "python", WARN, "Python 版本",
-        f"{got} 低于项目要求 {PY_MIN[0]}.{PY_MIN[1]}",
-        "装 Python 3.14 后重跑本脚本：https://www.python.org/downloads/",
-    )
+
+    need = f"{PY_MIN[0]}.{PY_MIN[1]}"
+    if venv_ver:
+        hint = (f".venv 里是 {venv_ver}，删掉 .venv 后重跑本脚本即可重建"
+                f"（用 uv 的话它会自己下 Python {need}）")
+    else:
+        hint = (f"装 Python {need} 后重跑本脚本：https://www.python.org/downloads/"
+                f"（用 uv 的话也可以 uv python install {need}）")
+    return Result("python", WARN, "Python 版本",
+                  f"{got} 低于项目要求 {need}，且没有可用的解释器", hint)
 
 
 def check_venv():
