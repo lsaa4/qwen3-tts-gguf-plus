@@ -20,7 +20,7 @@ from qwen3_tts_gguf.inference import TTSEngine, TTSConfig, TTSResult
 def main():
 
     # 初始化引擎
-    print("🚀 [Base-Clone] 正在初始化 TTS 引擎...")
+    print("[Base-Clone] 正在初始化 TTS 引擎...")
     engine = TTSEngine(model_dir="model-base", onnx_provider="CUDA")
     stream = engine.create_stream()
 
@@ -40,13 +40,13 @@ def main():
     
     
     # if stream.voice:
-    #     print(f"🔊 正在还原并播放参考音频: {REF_JSON} ...")
+    #     print(f"正在还原并播放参考音频: {REF_JSON} ...")
     #     engine.decode(stream.voice)
     #     engine.encode(stream.voice)
     #     stream.voice.play(blocking=True)
     
 
-    print(f"\n🎙️  [2/2] 开始流式推理 (边推边播)...")
+    print(f"\n [2/2] 开始流式推理 (边推边播)...")
     target_text = "Adding 8 frames of zero-pressure preheating inference during the construction phase will force the inference engine (such as DML) to complete the allocation of the computation graph and memory optimization in advance, thereby ensuring that the first formal inference is in the optimal peak state."
     config = TTSConfig(
         max_steps=400, 

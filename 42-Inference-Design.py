@@ -263,7 +263,7 @@ tasks.append((text, instruct))
 def main():
     
     # 初始化引擎
-    print(f"🚀 [Design-Inference] 正在初始化引擎...")
+    print(f"[Design-Inference] 正在初始化引擎...")
     engine = TTSEngine(model_dir="model-design", onnx_provider="CUDA")
     stream = engine.create_stream()
     
@@ -281,7 +281,7 @@ def main():
 
     # 遍历任务
     for i, (text, instruct) in enumerate(tasks):
-        print(f"\n🎨 [{i+1}/{len(tasks)}] 正在合成")
+        print(f"\n[{i+1}/{len(tasks)}] 正在合成")
         print(f"   文本: {text}")
         if instruct:
             print(f"   提示: {instruct}")
@@ -292,7 +292,7 @@ def main():
             config=config, 
         )
         
-        print(f"✅ 合成成功！")
+        print(f"合成成功！")
 
         
         # 保存结果
@@ -301,7 +301,7 @@ def main():
         save_path = f"./output/design/{i+1:02d}_{text_prefix}"
         result.save(f"{save_path}.wav")
         result.save(f"{save_path}.json")
-        print(f"💾 已保存至: {save_path}.wav / .json")
+        print(f"已保存至: {save_path}.wav / .json")
 
         result.print_stats()
         stream.join()

@@ -41,7 +41,7 @@ def main():
 
     src = Path(args.audio)
     if not src.exists():
-        print(f"❌ 找不到音频: {src}")
+        print(f"找不到音频: {src}")
         return 2
 
     out = Path(args.out) if args.out else Path("output/elaborate") / f"{args.name or src.stem}.json"
@@ -54,22 +54,22 @@ def main():
                 out = cand
                 break
             i += 1
-        print(f"⚠️ 同名音色已存在，改存为 {out.name}（要覆盖请加 -f）")
+        print(f"同名音色已存在，改存为 {out.name}（要覆盖请加 -f）")
 
     from qwen3_tts_gguf.inference import TTSEngine, TTSResult
     from qwen3_tts_gguf.inference.utils.audio import load_audio
 
-    print(f"🎤 载入编码器 (跳过 LLM，约 3 秒)...")
+    print(f"载入编码器 (跳过 LLM，约 3 秒)...")
     engine = TTSEngine(model_dir="model-base",
                        onnx_provider="CPU" if args.cpu_decode else "DML",
                        subprocess_decoder=False, load_llm=False, verbose=False)
     if not engine:
-        print("❌ 引擎初始化失败")
+        print("引擎初始化失败")
         return 1
 
     samples = load_audio(src)
     if samples is None:
-        print("❌ 音频解码失败，换 wav 或先转码")
+        print("音频解码失败，换 wav 或先转码")
         engine.shutdown()
         return 1
 
@@ -82,12 +82,12 @@ def main():
                       spk_emb=engine.speaker_encoder.encode(samples),
                       codes=engine.codec_encoder.encode(samples))
     if voice.spk_emb is None or voice.codes is None:
-        print("❌ 音色提取失败（音频里有人声吗？时长 5~15 秒最佳）")
+        print("音色提取失败（音频里有人声吗？时长 5~15 秒最佳）")
         engine.shutdown()
         return 1
 
     voice.save(str(out))
-    print(f"✅ 音色已保存: {out}  ({out.stat().st_size} bytes)")
+    print(f"音色已保存: {out}  ({out.stat().st_size} bytes)")
     print(f"   codes {voice.codes.shape} / 音色向量 {voice.spk_emb.shape} / 音频 {samples.shape[0]/24000:.1f}s")
     print(f"   使用: tts.py \"文本\" -v {out}")
     engine.shutdown()

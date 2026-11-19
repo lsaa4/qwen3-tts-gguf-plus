@@ -176,7 +176,7 @@ tasks.append((speaker, language, text, instruct))
 def main():
     
     # 1. 初始化引擎
-    print(f"🚀 [Custom-Inference] 正在初始化引擎")
+    print(f"[Custom-Inference] 正在初始化引擎")
     engine = TTSEngine(model_dir="model-custom", onnx_provider='CUDA')
     stream = engine.create_stream()
     
@@ -194,7 +194,7 @@ def main():
 
     # 遍历任务
     for i, (speaker, language, text, instruct) in enumerate(tasks):
-        print(f"\n🎭 [{i+1}/{len(tasks)}] 正在合成: {speaker}")
+        print(f"\n[{i+1}/{len(tasks)}] 正在合成: {speaker}")
         print(f"   文本: {text}")
         if instruct:
             print(f"   提示: {instruct}")
@@ -210,7 +210,7 @@ def main():
             language=lang,
             config=config, 
         )
-        print(f"✅ 合成成功！")
+        print(f"合成成功！")
         
         # 保存结果
         # 取前10个字并清理非法字符以用于文件名
@@ -218,7 +218,7 @@ def main():
         save_path = f"./output/custom/{i+1:02d}_{speaker}_{text_prefix}"
         result.save(f"{save_path}.wav")
         result.save(f"{save_path}.json")
-        print(f"💾 已保存至: {save_path}.wav / .json")
+        print(f"已保存至: {save_path}.wav / .json")
 
         result.print_stats()
         stream.join()
