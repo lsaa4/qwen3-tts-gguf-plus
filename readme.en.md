@@ -419,10 +419,11 @@ Only needed if you take the "export it yourself" path.
 python export_model.py                 # interactive picker, fully automatic
 python export_model.py -m custom       # skip the menu
 python export_model.py -m base --out D:\exp\model-base   # custom target
+python export_model.py -m base --src E:\models            # where the source model lives
 python export_model.py -m base --only 21,22,23,24          # rerun a few steps
 ```
 
-Double-clicking `export-model.bat` does the same on Windows. It checks the source model (downloading it via modelscope when missing), export dependencies (`uv sync --extra export`), `llama-quantize.exe` (from `setup.bat`), and free disk space (8–10 GB of scratch). Afterwards it verifies the six core files plus `embeddings/`.
+Double-clicking `export-model.bat` does the same on Windows. It checks the source model (downloading it via modelscope when missing), export dependencies (`setup.bat` installs inference-only packages, so torch is offered for install on the spot), `llama-quantize.exe` (from `setup.bat`), and free disk space (8–10 GB of scratch). Afterwards it verifies the six core files plus `embeddings/`.
 
 Measured: with dependencies and source model in place, 1.7B-Base exports in 2.6 minutes and matches a hand-run export byte-for-byte. Intermediates (`*_hf/`, `*.f16.gguf`, `*.fp32.onnx` with external data, `*.int8.onnx`) take about 6 GB and are cleaned on request.
 
