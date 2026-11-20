@@ -418,41 +418,68 @@ def gather():
 # ---------------------------------------------------------------- 修复动作
 
 
-def _download(url, dest: Path, label):
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".part")
-    say(C.dim(f"  下载 {label} …"))
+class DownloadError(RuntimeError):
+    """下载失败/中断/文件损坏。"""
 
-    def hook(blocks, bs, total):
-        if total <= 0:
-            return
-        done = blocks * bs
-        pct = min(100, done * 100 // total)
-        bar = "#" * (pct // 4)
-        sys.stdout.write(f"\r  [{bar:<25}] {pct:3d}%  {done / 2**20:.1f}/{total / 2**20:.1f} MB")
-        sys.stdout.flush()
 
+def _download_once(url, tmp: Path, label):
     req = urllib.request.Request(url, headers={"User-Agent": "qwen3-tts-gguf-setup"})
+    written = 0
     with urllib.request.urlopen(req, timeout=60) as r, tmp.open("wb") as f:
         total = int(r.headers.get("Content-Length") or 0)
-        blocks = 0
         while True:
             chunk = r.read(1 << 18)
             if not chunk:
                 break
             f.write(chunk)
-            blocks += 1
-            hook(blocks, 1 << 18, total)
+            written += len(chunk)
+            if total > 0:
+                pct = min(100, written * 100 // total)
+                bar = "#" * (pct // 4)
+                sys.stdout.write(
+                    f"\r  [{bar:<25}] {pct:3d}%  {written / 2**20:.1f}/{total / 2**20:.1f} MB"
+                )
+                sys.stdout.flush()
     sys.stdout.write("\r" + " " * 60 + "\r")
-    tmp.replace(dest)
-    return dest
+    sys.stdout.flush()
+    if total and written < total:
+        raise DownloadError(f"只收到 {written / 2**20:.1f}/{total / 2**20:.1f} MB")
+    return written
+
+
+def _download(url, dest: Path, label, tries=3):
+    """下载到 dest，校验大小和 zip 完整性，失败自动重试。"""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    say(C.dim(f"  下载 {label} …"))
+    last = None
+    for attempt in range(1, tries + 1):
+        try:
+            _download_once(url, tmp, label)
+            if dest.suffix.lower() == ".zip" and not zipfile.is_zipfile(tmp):
+                raise DownloadError("文件不完整（不是有效的 zip）")
+            tmp.replace(dest)
+            return dest
+        except DownloadError as e:
+            last = e
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            last = e
+        tmp.unlink(missing_ok=True)
+        if attempt < tries:
+            say(C.dim(f"  下载失败：{last}；第 {attempt}/{tries} 次重试 …"))
+    raise DownloadError(f"{label} 下载失败：{last}")
 
 
 def _extract_bin(zip_path: Path, dest_dir: Path, want="bin"):
     """从 zip 里挑出最像 bin 的那一层，平铺拷到 dest_dir。"""
     dest_dir.mkdir(parents=True, exist_ok=True)
     copied = 0
-    with zipfile.ZipFile(zip_path) as z:
+    try:
+        z = zipfile.ZipFile(zip_path)
+    except zipfile.BadZipFile:
+        zip_path.unlink(missing_ok=True)
+        raise DownloadError(f"{zip_path.name} 已损坏，已删除；重跑本脚本会重新下载") from None
+    with z:
         names = z.namelist()
         # 找包含目标 exe/dll 的目录前缀
         prefixes = set()
@@ -654,12 +681,19 @@ def main():
         say()
         section(f"修复 {r.title}")
         ok = False
-        if r.key in ("venv", "packages"):
-            ok = fix_venv()
-        elif r.key == "llama":
-            ok = fix_llama()
-        elif r.key == "ffmpeg":
-            ok = fix_ffmpeg()
+        try:
+            if r.key in ("venv", "packages"):
+                ok = fix_venv()
+            elif r.key == "llama":
+                ok = fix_llama()
+            elif r.key == "ffmpeg":
+                ok = fix_ffmpeg()
+        except DownloadError as e:
+            say(C.err(f"  {e}"))
+            say(C.dim("  网络不稳的话直接重跑本脚本，已下好的文件会复用。"))
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            say(C.err(f"  出错了：{e}"))
+            say(C.dim("  检查网络后重跑本脚本。"))
         say(C.ok(f"  {r.title} 完成") if ok else C.err(f"  {r.title} 失败，请手动处理"))
         fixed += 1 if ok else 0
 
