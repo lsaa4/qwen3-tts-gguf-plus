@@ -1,10 +1,10 @@
-# Qwen3-TTS GGUF
+# Qwen3-TTS GGUF PLUS
 
 [English](readme.en.md)
 
 用 llama.cpp 跑的 Qwen3-TTS，支持流式合成、声音克隆，附带图形界面和 OpenAI 兼容的本地 HTTP 服务。
 
-本项目基于 [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF)（MIT）二次开发，在上游基础上新增图形界面、OpenAI 兼容 HTTP 服务与一键安装脚本。
+本项目基于 [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF)（MIT）二次开发，在上游基础上修改并完善图形界面，添加了OpenAI 兼容 HTTP 服务 一键安装脚本以及模型转换。
 
 三步用起来：双击 `setup.bat` 装环境 → 准备 `model-base` 模型目录 → 双击 `启动GUI.bat`。
 
