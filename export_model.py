@@ -141,6 +141,16 @@ INTERMEDIATE_GLOBS = [
 
 EXPORT_DEPS = ["torch", "torchaudio", "onnx", "onnxruntime", "safetensors", "transformers", "numpy"]
 MODULE_PKG = {"onnxruntime": "onnxruntime"}   # 其余 import 名和包名一致
+
+# 与 pyproject.toml 的 [project.optional-dependencies].export 保持同步。
+# 必须锁版本：transformers 5.x 改了 check_model_inputs 的装饰器用法，
+# 装最新的会让 11~16 号导出脚本一上来就 TypeError。
+EXPORT_SPECS = [
+    "torch>=2.10", "torchaudio>=2.10", "torchvision>=0.28.0",
+    "transformers==4.57.6", "accelerate==1.12.0",
+    "onnx>=1.22.0", "onnxscript>=0.7.1",
+    "sentencepiece>=0.2.2", "einops>=0.8.2",
+]
 QUANTIZER = ROOT / "qwen3_tts_gguf" / "inference" / "bin" / "llama-quantize.exe"
 
 
@@ -303,14 +313,21 @@ def download_source(name: str) -> Path | None:
 def check_deps() -> list[str]:
     import importlib.util
 
-    return [m for m in EXPORT_DEPS if importlib.util.find_spec(m) is None]
+    bad = [m for m in EXPORT_DEPS if importlib.util.find_spec(m) is None]
+    # 版本过新也算不满足：transformers 5.x 的崩溃很难让用户自己看出来
+    try:
+        import transformers
+        if int(transformers.__version__.split(".")[0]) >= 5 and "transformers" not in bad:
+            bad.append("transformers")
+    except Exception:
+        pass
+    return bad
 
 
 def install_deps(missing: list[str]) -> bool:
     """导出依赖不在 setup.bat 的安装范围里，缺了就地问一句装掉。"""
-    pkgs = [MODULE_PKG.get(m, m) for m in missing]
     say(f"  缺：{', '.join(missing)}")
-    say(C.dim(f"  安装命令：{sys.executable} -m pip install {' '.join(pkgs)}"))
+    say(C.dim(f"  会装：{' '.join(EXPORT_SPECS)}"))
     say(C.dim("  torch 一个就 200 MB ~ 2.5 GB，首次会慢。"))
     try:
         ans = input("  现在装？(Y/n) ").strip().lower()
@@ -319,12 +336,19 @@ def install_deps(missing: list[str]) -> bool:
     if ans in ("n", "no"):
         say(C.dim("  跳过。装好后再跑本脚本即可。"))
         return False
-    r = subprocess.run([sys.executable, "-m", "pip", "install", "-U", *pkgs,
-                        "-i", "https://mirrors.aliyun.com/pypi/simple/"], cwd=ROOT)
-    if r.returncode != 0:
-        say(C.err("  安装失败。可以试：uv sync --extra export"))
-        return False
-    return not check_deps()
+    mirror = "https://mirrors.aliyun.com/pypi/simple"
+    uv = shutil.which("uv")
+    cmds = []
+    if uv:      # uv 并发下载，比 pip 快一个量级
+        cmds.append([uv, "pip", "install", "--python", sys.executable,
+                     *EXPORT_SPECS, "--index-url", mirror])
+    cmds.append([sys.executable, "-m", "pip", "install", *EXPORT_SPECS, "-i", mirror])
+    for cmd in cmds:
+        r = subprocess.run(cmd, cwd=ROOT)
+        if r.returncode == 0 and not check_deps():
+            return True
+    say(C.err("  安装失败。可以试：uv sync --extra export"))
+    return False
 
 
 def free_space_gb(path: Path) -> float:
