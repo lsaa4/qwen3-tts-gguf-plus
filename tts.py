@@ -14,6 +14,7 @@ Qwen3-TTS-GGUF 命令行合成工具（ONNX DirectML + llama.cpp Vulkan）
     -s/--seed    随机种子 (默认 42，固定音色更稳定)
     -t/--temp    采样温度 (默认 0.6)
     -z/--zero    使用零样本克隆 (仅用说话人嵌入，跨语种更稳)
+    --max-steps  生成步数上限 (默认按文本长度自动估算，约 12.5 步/秒)
 """
 import argparse
 import glob
@@ -35,6 +36,17 @@ sys.path.insert(0, str(ROOT))
 
 DEFAULT_VOICE = "output/elaborate/Vivian.json"
 
+# 12.5 步/秒（12Hz 码本 + 少量额外帧）。中文正常语速约 4.5 字/秒，
+# 折合每字约 2.8 步；给到 6 步/字 + 80 步余量，既够长句也不会让跑飞的
+# 采样一直重复到上限（1024 步约 82 秒，听感上是灾难）。
+STEPS_PER_CHAR = 6
+STEPS_MARGIN = 80
+
+
+def auto_max_steps(text):
+    n = len([c for c in text if not c.isspace()])
+    return max(200, min(2048, n * STEPS_PER_CHAR + STEPS_MARGIN))
+
 
 def list_voices():
     files = sorted(glob.glob("output/elaborate/*.json"))
@@ -54,6 +66,8 @@ def main():
     ap.add_argument("-s", "--seed", type=int, default=42)
     ap.add_argument("-t", "--temp", type=float, default=0.6)
     ap.add_argument("-z", "--zero", action="store_true", help="零样本克隆")
+    ap.add_argument("--max-steps", type=int, default=None,
+                    help="生成步数上限（默认按文本长度自动估算，约 12.5 步/秒）")
     ap.add_argument("--list-voices", action="store_true")
     ap.add_argument("--cpu-decode", action="store_true", help="ONNX 解码器用 CPU (DML 出错时)")
     args = ap.parse_args()
@@ -80,7 +94,8 @@ def main():
     else:
         print(f"参考音色不存在: {voice} (将用模型默认行为)", file=sys.stderr)
 
-    cfg = TTSConfig(max_steps=1024, temperature=args.temp, sub_temperature=args.temp,
+    max_steps = args.max_steps or auto_max_steps(args.text)
+    cfg = TTSConfig(max_steps=max_steps, temperature=args.temp, sub_temperature=args.temp,
                     seed=args.seed, sub_seed=args.seed + 3, streaming=False)
 
     t1 = time.time()
@@ -100,6 +115,15 @@ def main():
 
     print(f"{out}")
     print(f"   音频 {dur:.2f}s | 生成 {gen:.2f}s | RTF {gen/dur if dur else 0:.3f} | 端到端 {time.time()-t0:.2f}s")
+
+    # 撞上限 = 没自然收束：total_steps 是 0 基步数，直接比会差一步，
+    # 所以用音频时长和上限帧数（12.5 帧/秒）对照更可靠。
+    limit_secs = max_steps / 12.5
+    if dur >= limit_secs - 0.3:
+        print(f"   注意：已用满 {max_steps} 步上限，音频可能被截断，或模型陷入复读。"
+              f"可加大 --max-steps，或换 -s/--seed、-t/--temp 重试；"
+              f"若某个音色一直复读，多半是它的参考音频有问题，建议重录再克隆。",
+              file=sys.stderr)
     stream.join()
     engine.shutdown()
     return 0
