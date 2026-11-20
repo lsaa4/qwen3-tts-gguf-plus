@@ -130,7 +130,15 @@ modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
 modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 ```
 
-Put the weights anywhere — the export script scans every drive (depth 5, 25 s budget) and picks the model up from the Desktop, `H:\weights\`, `D:\AI\models\` or a folder renamed with a ` (1)` suffix. If it still misses, point at it with `--src`.
+Drop the downloaded model folder into `models\` inside the project, one folder per model:
+
+```
+qwen3-tts-gguf\
+  models\
+    Qwen3-TTS-12Hz-1.7B-Base\        model.safetensors, config.json, speech_tokenizer\ …
+```
+
+`export-model.bat` looks there first — no environment variables, no moving files around (the folder is git-ignored). Anywhere else works too: every drive is scanned, including the Desktop and `H:\weights\`; `--src` is the last resort.
 
 ### 3. Launch
 
@@ -435,9 +443,9 @@ What the one-command path does, if you'd rather drive it yourself.
 
 `export_config.py` decides where official models are read from and where exports go. The source is located in this order:
 
-1. `QWEN_MODEL_DIR` (points at the model folder itself)
-2. `QWEN_MODEL_HOME` (points at the parent folder)
-3. `<repo>\models\<name>`, and the same name one level above the repo
+1. `<repo>\models\<name>` (the intended drop-in location)
+2. `QWEN_MODEL_DIR` / `QWEN_MODEL_HOME`
+3. the same name one level above the repo
 4. common layers on every drive (`models`, `AI`, `llm`, `qwen3-tts`, …)
 5. Desktop / Downloads / Documents / ModelScope and HuggingFace caches
 6. shallow scan of every drive (depth 5, early exit)
