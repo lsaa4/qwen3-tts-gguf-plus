@@ -219,18 +219,28 @@ def _scan(root: Path, name: str, depth: int = 4, budget: float = 15.0) -> Path |
 
 
 def find_source(name: str) -> Path | None:
-    """找官方模型目录：环境变量 → 项目内 → 各盘常见位置 → 全盘浅扫。"""
+    """找官方模型目录：显式指定 → 项目内 models/ → 环境变量 → 各盘常见位置 → 全盘浅扫。"""
+    # 1) 项目内 models/<模型名>：约定的放置位置，优先认
+    for cand in (ROOT / "models" / name, ROOT / "models" / name.replace("-", " ")):
+        if (cand / "model.safetensors").exists():
+            return cand
+    models_dir = ROOT / "models"
+    if models_dir.is_dir():
+        hit = _scan(models_dir, name, depth=2)
+        if hit:
+            return hit
+    # 2) 环境变量
     env = os.environ.get("QWEN_MODEL_HOME") or os.environ.get("QWEN_MODEL_DIR")
     if env:
         e = Path(env).expanduser()
         for cand in (e, e / name):
             if cand.is_dir() and (cand / "model.safetensors").exists():
                 return cand
-    # 项目自己带的 models/ 和它的上一层
-    for cand in (ROOT / "models" / name, ROOT.parent / name, ROOT.parent / "models" / name):
+    # 3) 项目上一层
+    for cand in (ROOT.parent / name, ROOT.parent / "models" / name):
         if (cand / "model.safetensors").exists():
             return cand
-    # 各盘根 + 常见的模型存放层
+    # 4) 各盘根 + 常见的模型存放层
     roots = _drives()
     near = ["model", "models", "Models", "ai", "AI", "llm", "LLM",
             "qwen3-tts/models", "qwen3-tts", "huggingface", "下载", "Downloads"]
@@ -239,7 +249,7 @@ def find_source(name: str) -> Path | None:
             d = drv / sub / name
             if (d / "model.safetensors").exists():
                 return d
-    # 桌面 / 下载 / 文档 / 缓存
+    # 5) 桌面 / 下载 / 文档 / 缓存
     home = Path.home()
     for sub in ("Desktop", "Downloads", "Documents", "桌面", "下载", "文档"):
         d = home / sub / name
@@ -251,7 +261,7 @@ def find_source(name: str) -> Path | None:
             hit = _scan(cache, name, depth=5)
             if hit:
                 return hit
-    # 最后兜底：全盘浅扫（总预算 25 秒，找到就停）
+    # 6) 兜底：全盘浅扫（总预算 25 秒，找到就停）
     t_all = time.time()
     for drv in roots:
         left = 25.0 - (time.time() - t_all)
@@ -466,11 +476,18 @@ def main() -> int:
             say(C.dim("  --src 要指到含 model.safetensors、config.json、speech_tokenizer/ 的那一层。"))
             return 2
     else:
-        say(C.dim("  自动搜索各个盘 …（几秒钟，最多十几秒）"))
+        say(C.dim("  先在 models\\ 里找，没有就搜各个盘 …（最多十几秒）"))
         src = find_source(src_name)
     if src is None:
         say(C.err(f"  没找到 {src_name}"))
-        say(C.dim("  三种办法，任选一个："))
+        say(C.dim(f"  最省事的办法：把它整个文件夹放进 {ROOT / 'models'}"))
+        say(C.dim(f'    也就是 {ROOT / "models" / src_name}'))
+        models_dir = ROOT / "models"
+        if models_dir.is_dir():
+            others = [d.name for d in models_dir.iterdir() if (d / "model.safetensors").exists()]
+            if others:
+                say(C.warn(f"  不过 models\\ 里有这些：{', '.join(others)}"))
+        say(C.dim("  或者："))
         say(C.dim("    1) 加 --src 指过去（桌面、H 盘都行）"))
         say(C.dim("    2) 设环境变量 QWEN_MODEL_HOME 指向存放模型的目录"))
         say(C.dim("    3) 不加 --no-download 重跑，让脚本走 modelscope 下载"))
