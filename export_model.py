@@ -140,6 +140,7 @@ INTERMEDIATE_GLOBS = [
 ]
 
 EXPORT_DEPS = ["torch", "torchaudio", "onnx", "onnxruntime", "safetensors", "transformers", "numpy"]
+MODULE_PKG = {"onnxruntime": "onnxruntime"}   # 其余 import 名和包名一致
 QUANTIZER = ROOT / "qwen3_tts_gguf" / "inference" / "bin" / "llama-quantize.exe"
 
 
@@ -188,6 +189,27 @@ def check_deps() -> list[str]:
     import importlib.util
 
     return [m for m in EXPORT_DEPS if importlib.util.find_spec(m) is None]
+
+
+def install_deps(missing: list[str]) -> bool:
+    """导出依赖不在 setup.bat 的安装范围里，缺了就地问一句装掉。"""
+    pkgs = [MODULE_PKG.get(m, m) for m in missing]
+    say(f"  缺：{', '.join(missing)}")
+    say(C.dim(f"  安装命令：{sys.executable} -m pip install {' '.join(pkgs)}"))
+    say(C.dim("  torch 一个就 200 MB ~ 2.5 GB，首次会慢。"))
+    try:
+        ans = input("  现在装？(Y/n) ").strip().lower()
+    except EOFError:
+        ans = "n"
+    if ans in ("n", "no"):
+        say(C.dim("  跳过。装好后再跑本脚本即可。"))
+        return False
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "-U", *pkgs,
+                        "-i", "https://mirrors.aliyun.com/pypi/simple/"], cwd=ROOT)
+    if r.returncode != 0:
+        say(C.err("  安装失败。可以试：uv sync --extra export"))
+        return False
+    return not check_deps()
 
 
 def free_space_gb(path: Path) -> float:
@@ -301,6 +323,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="一键导出 Qwen3-TTS GGUF 模型")
     ap.add_argument("-m", "--model", choices=ORDER, help="要导出的模型（不给就交互选择）")
     ap.add_argument("--out", help="输出目录（默认项目根下的 model-base 等）")
+    ap.add_argument("--src", help="源模型目录，含 model.safetensors 的那一层；不给就自动探测")
     ap.add_argument("--only", help="只跑指定步骤编号，逗号分隔，例如 21,22,23,24")
     ap.add_argument("--keep", action="store_true", help="保留中间产物")
     ap.add_argument("--no-download", action="store_true", help="源模型不存在时不自动下载")
@@ -325,7 +348,13 @@ def main() -> int:
 
     # 1. 源模型
     section("定位源模型")
-    src = find_source(src_name)
+    src = Path(args.src).expanduser() if args.src else find_source(src_name)
+    # 允许直接指到父目录（里面套着同名模型文件夹）
+    if src and not (src / "model.safetensors").exists() and (src / src_name).is_dir():
+        src = src / src_name
+    if src is not None and not src.is_dir():
+        say(C.err(f"  --src 指过去不是目录：{src}"))
+        return 2
     if src is None:
         if args.no_download:
             say(C.err(f"  没找到 {src_name}，也没有允许自动下载。"))
@@ -341,10 +370,12 @@ def main() -> int:
     section("检查依赖")
     missing = check_deps()
     if missing:
-        say(C.err(f"  缺 Python 包：{', '.join(missing)}"))
-        say(C.dim("  跑一次：uv sync --extra export   （或 pip install torch onnx onnxruntime safetensors transformers）"))
-        return 3
-    say(C.ok("  ✓ 导出依赖齐全"))
+        if not install_deps(missing):
+            say(C.err("  导出依赖不全，先补上再跑。"))
+            return 3
+        say(C.ok("  ✓ 依赖装好了"))
+    else:
+        say(C.ok("  ✓ 导出依赖齐全"))
 
     if not QUANTIZER.exists():
         say(C.err(f"  缺量化工具：{QUANTIZER}"))

@@ -421,10 +421,11 @@ ctx ≈ 10 + 16.5 × 总音频秒数
 python export_model.py                 # 交互选模型，全程自动
 python export_model.py -m custom       # 直接指定，省掉菜单
 python export_model.py -m base --out D:\exp\model-base   # 导到别的位置
+python export_model.py -m base --src E:\models           # 指定源模型所在目录
 python export_model.py -m base --only 21,22,23,24          # 只重跑某几步
 ```
 
-Windows 上双击 `export-model.bat` 等价。它会依次确认：源模型在不在（不在就调 modelscope 下载）、导出依赖齐不齐（缺了提示 `uv sync --extra export`）、`llama-quantize.exe` 在不在（缺了提示跑 `setup.bat`）、磁盘够不够（临时要 8~10 GB）。跑完自动校验六个主文件加 `embeddings/`，数值不对会指出来。
+Windows 上双击 `export-model.bat` 等价。它会依次确认：源模型在不在（不在就调 modelscope 下载）、导出依赖齐不齐（缺了当场问你要不要 `pip install`，因为 `setup.bat` 只装推理依赖，不含 torch）、`llama-quantize.exe` 在不在（缺了提示跑 `setup.bat`）、磁盘够不够（临时要 8~10 GB）。跑完自动校验六个主文件加 `embeddings/`，数值不对会指出来。
 
 实测：依赖和源模型都就绪的情况下，1.7B-Base 全流程 2.6 分钟，产物与手工导出的逐文件 md5 一致。中间产物（`*_hf/`、`*.f16.gguf`、`*.fp32.onnx` 及外部权重、`*.int8.onnx`）共约 6 GB，跑完会问你要不要删。
 
