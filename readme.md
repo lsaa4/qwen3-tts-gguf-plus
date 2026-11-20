@@ -105,9 +105,9 @@ python install.py               # 体检 + 自动修复，加 --yes 免确认
 
 推理需要 `model-base` 目录，放在项目根目录下，里面是导出好的 GGUF 与 ONNX 文件。三条路，选一条：
 
-**A. 自己导出**（从零，最慢，约 1-2 小时）
+**A. 自己导出**（从零）
 
-先下载官方模型，再跑[导出模型](#导出模型)里的脚本。适合想换量化精度或改结构的人。
+双击 `export-model.bat`，剩下的交给它：找源模型（没有就自动下）、查依赖、按顺序跑完十四个脚本、校验产物、问你要不要清中间文件。想手工控制精度或结构，就照[导出模型](#导出模型)里的步骤一个个跑。
 
 **B. 直接拷贝现成的 `model-base` 目录**
 
@@ -414,6 +414,23 @@ ctx ≈ 10 + 16.5 × 总音频秒数
 ## 导出模型
 
 只有走「自己导出」这条路才需要看这节。
+
+### 一键导出
+
+```bash
+python export_model.py                 # 交互选模型，全程自动
+python export_model.py -m custom       # 直接指定，省掉菜单
+python export_model.py -m base --out D:\exp\model-base   # 导到别的位置
+python export_model.py -m base --only 21,22,23,24          # 只重跑某几步
+```
+
+Windows 上双击 `export-model.bat` 等价。它会依次确认：源模型在不在（不在就调 modelscope 下载）、导出依赖齐不齐（缺了提示 `uv sync --extra export`）、`llama-quantize.exe` 在不在（缺了提示跑 `setup.bat`）、磁盘够不够（临时要 8~10 GB）。跑完自动校验六个主文件加 `embeddings/`，数值不对会指出来。
+
+实测：依赖和源模型都就绪的情况下，1.7B-Base 全流程 2.6 分钟，产物与手工导出的逐文件 md5 一致。中间产物（`*_hf/`、`*.f16.gguf`、`*.fp32.onnx` 及外部权重、`*.int8.onnx`）共约 6 GB，跑完会问你要不要删。
+
+### 手工分步跑
+
+下面的流程一键脚本做的就是这些。
 
 ### 配置路径
 

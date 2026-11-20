@@ -105,9 +105,9 @@ python install.py               # check + fix, add --yes to skip prompts
 
 Inference needs a `model-base` directory in the project root, containing the exported GGUF and ONNX files. Pick one of three paths:
 
-**A. Export it yourself** (slowest, 1–2 hours)
+**A. Export it yourself**
 
-Download the official models, then run the scripts in [Exporting models](#exporting-models). For people who want different quantization or a modified layout.
+Double-click `export-model.bat` and let it do the work: locate the source model (downloading it if missing), verify dependencies, run all fourteen scripts in order, check the output, and offer to delete the intermediates. Prefer manual control over quantization or layout? Follow the steps in [Exporting models](#exporting-models) one by one.
 
 **B. Copy an existing `model-base` directory**
 
@@ -412,6 +412,23 @@ Batching only accelerates the LLM part (bandwidth bound); decoding the generated
 ## Exporting models
 
 Only needed if you take the "export it yourself" path.
+
+### One command
+
+```bash
+python export_model.py                 # interactive picker, fully automatic
+python export_model.py -m custom       # skip the menu
+python export_model.py -m base --out D:\exp\model-base   # custom target
+python export_model.py -m base --only 21,22,23,24          # rerun a few steps
+```
+
+Double-clicking `export-model.bat` does the same on Windows. It checks the source model (downloading it via modelscope when missing), export dependencies (`uv sync --extra export`), `llama-quantize.exe` (from `setup.bat`), and free disk space (8–10 GB of scratch). Afterwards it verifies the six core files plus `embeddings/`.
+
+Measured: with dependencies and source model in place, 1.7B-Base exports in 2.6 minutes and matches a hand-run export byte-for-byte. Intermediates (`*_hf/`, `*.f16.gguf`, `*.fp32.onnx` with external data, `*.int8.onnx`) take about 6 GB and are cleaned on request.
+
+### Step by step
+
+What the one-command path does, if you'd rather drive it yourself.
 
 ### Paths
 
