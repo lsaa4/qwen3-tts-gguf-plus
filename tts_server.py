@@ -59,7 +59,7 @@ def main():
 
     from qwen3_tts_gguf.inference import TTSEngine
 
-    provider = "CPU" if args.cpu_decode else "DML"
+    provider = "CPU" if args.cpu_decode else "GPU"
     log(f"载入引擎 model={args.model} provider={provider}")
     t0 = time.time()
     try:

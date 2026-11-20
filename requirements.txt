@@ -2,9 +2,17 @@
 # 两边改依赖时需手动同步。
 # 仅推理/GUI 运行；导出/量化才需要的依赖见文件末尾注释块。
 
-# ONNX 运行时二选一：默认 DirectML（任意显卡可用）；N 卡可换 onnxruntime-cuda
+# ONNX 运行时二选一：默认 DirectML（任意显卡可用）
 onnxruntime-directml>=1.24.4
-# onnxruntime-cuda>=1.29.0
+# N 卡走 CUDA 时改用下面这组（注释掉上面一行）。ORT 1.25 需 CUDA 12.x，
+# nvidia-* 系列 wheel 提供 cublas/cudnn/cufft 的 dll，无需装 CUDA Toolkit。
+# onnxruntime-gpu>=1.25.0,<1.26
+# nvidia-cublas-cu12
+# nvidia-cudnn-cu12
+# nvidia-cufft-cu12
+# nvidia-curand-cu12
+# nvidia-cuda-runtime-cu12
+# nvidia-cuda-nvrtc-cu12
 
 # 推理
 gguf>=0.19.0

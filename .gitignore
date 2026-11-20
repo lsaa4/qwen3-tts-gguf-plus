@@ -74,3 +74,6 @@ Thumbs.db
 # ==================== 官方实现快照（仅导出参考）====================
 Qwen3-TTS-main/.gitignore
 Qwen3-TTS-main/.github/
+
+# 本地诊断脚本
+tools/
