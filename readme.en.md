@@ -1,10 +1,10 @@
-# Qwen3-TTS GGUF
+# Qwen3-TTS GGUF PLUS
 
 [中文](readme.md)
 
 Qwen3-TTS running on llama.cpp, with streaming synthesis and voice cloning, plus a graphical interface and an OpenAI-compatible local HTTP server.
 
-Built on [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF) (MIT). This version adds a graphical interface, an OpenAI-compatible HTTP server and a one-click installer on top of the upstream project.
+Built on [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF) (MIT). This version reworks the GUI and adds an OpenAI-compatible HTTP server and a one-click installer on top of the upstream project.
 
 Three steps: run `setup.bat` to prepare the environment → get a `model-base` directory → run `启动GUI.bat`.
 
@@ -26,12 +26,13 @@ Three steps: run `setup.bat` to prepare the environment → get a `model-base` d
 
 Changes on top of upstream:
 
-- **GUI** (`52-GUI.py`): clone / custom voice / voice design / server / tools / settings / log — seven tabs, no code editing required.
+- **GUI rework** (`qwen3_tts_gguf/gui`): upstream already shipped clone / custom voice / voice design / tools / settings / log tabs. Here the visuals are rebuilt (header bar, colours, CJK font, scrollable pages) and a new **Server** tab was added — start, stop, set the port and read the status of the HTTP server from the UI.
 - **OpenAI-compatible HTTP server** (`tts_server.py`): `/v1/audio/speech`, `/v1/voices`; point SillyTavern, Cherry Studio, Open WebUI or any custom endpoint at it.
 - **One-click install and health check** (`install.py` + `setup.bat`): checks Python version, venv, dependencies, llama.cpp runtime, models, FFmpeg and the voice folder, and installs what's missing.
+- **One-click model export** (`export_model.py` + `export-model.bat`): finds the source model, runs the fourteen export scripts in order, verifies the outputs.
 - **Chinese docs and launchers**: `启动GUI.bat` / `启动服务.bat` / `克隆音色.bat`.
 
-Capabilities inherited from upstream:
+Capabilities inherited from upstream (the inference core is untouched):
 
 - **Streaming synthesis**: play while generating, first audio in as little as 300 ms.
 - **Acceleration**: Talker / Predictor on llama.cpp (Vulkan or CUDA), Encoder / Decoder on ONNX Runtime (DirectML or CUDA).

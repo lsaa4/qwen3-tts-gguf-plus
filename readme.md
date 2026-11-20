@@ -4,7 +4,7 @@
 
 用 llama.cpp 跑的 Qwen3-TTS，支持流式合成、声音克隆，附带图形界面和 OpenAI 兼容的本地 HTTP 服务。
 
-本项目基于 [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF)（MIT）二次开发，在上游基础上修改并完善图形界面，添加了OpenAI 兼容 HTTP 服务 一键安装脚本以及模型转换。
+本项目基于 [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGUF)（MIT）二次开发，在上游基础上修改并完善图形界面，并新增 OpenAI 兼容 HTTP 服务、一键安装脚本与模型导出脚本。
 
 三步用起来：双击 `setup.bat` 装环境 → 准备 `model-base` 模型目录 → 双击 `启动GUI.bat`。
 
@@ -26,12 +26,13 @@
 
 相对上游的改动：
 
-- **图形界面**（`52-GUI.py`）：克隆 / 自定义音色 / 音色设计 / 服务 / 工具 / 设置 / 日志，七个标签页，不用改代码就能跑。
+- **GUI 改造**（`qwen3_tts_gguf/gui`）：上游 GUI 本来就有克隆 / 自定义音色 / 音色设计 / 工具 / 设置 / 日志六个页，这里重做了视觉（顶部标题条、配色、中文字体、页面可滚动），并新增「服务」页——OpenAI 服务的启停、端口、状态都能在界面里点。
 - **OpenAI 兼容 HTTP 服务**（`tts_server.py`）：`/v1/audio/speech`、`/v1/voices`，SillyTavern、Cherry Studio、Open WebUI 直接填地址就能用。
 - **一键安装体检**（`install.py` + `setup.bat`）：Python 版本、虚拟环境、依赖、llama.cpp 运行库、模型、FFmpeg、音色目录逐项检查，缺什么装什么。
+- **一键导出模型**（`export_model.py` + `export-model.bat`）：自动找源模型、按顺序跑完十四个导出脚本、校验产物。
 - **中文文档与启动脚本**：`启动GUI.bat` / `启动服务.bat` / `克隆音色.bat`，双击即用。
 
-上游本身提供的能力：
+上游本身提供的能力（推理内核未重写，以下均为上游实现）：
 
 - **流式合成**：边推边播，首音延迟最低 300ms 内。
 - **加速推理**：Talker / Predictor 走 llama.cpp（Vulkan 或 CUDA），Encoder / Decoder 走 ONNX Runtime（DirectML 或 CUDA）。
