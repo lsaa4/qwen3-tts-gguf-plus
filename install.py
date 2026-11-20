@@ -61,7 +61,7 @@ ONNX_CUDA_WHEELS = [
     "nvidia-cuda-runtime-cu12",
     "nvidia-cuda-nvrtc-cu12",
 ]
-# CUDA EP 运行时会按需加载这几个 dll，缺一个就静默退回 CPU
+# CUDA EP 运行时会按需加载 cublasLt/cudnn/cufft，缺一个就静默退回 CPU
 ONNX_CUDA_DLLS = ("cublaslt64", "cudnn64", "cufft64")
 
 # 默认（Vulkan）包，hint 文案里引用
@@ -365,28 +365,40 @@ def check_onnx_cuda():
     if not py.exists():
         return Result("onnx-cuda", OK, "ONNX 加速后端", "跳过（无 .venv）")
 
+    enc = MODEL_DIR / "qwen3_tts_speaker_encoder.fp16.onnx"
     code = (
         "import json,os,sys\n"
         "sp=os.path.join(sys.prefix,'Lib','site-packages')\n"
         "nv=os.path.join(sp,'nvidia')\n"
-        "dll=set()\n"
+        "dirs=[]\n"
         "if os.path.isdir(nv):\n"
-        "    for d in os.listdir(nv):\n"
-        "        b=os.path.join(nv,d,'bin')\n"
-        "        if os.path.isdir(b):\n"
-        "            dll|={f.lower() for f in os.listdir(b)}\n"
-        "prov=[];ver=''\n"
+        "    dirs=[os.path.join(nv,d,'bin') for d in os.listdir(nv)\n"
+        "          if os.path.isdir(os.path.join(nv,d,'bin'))]\n"
+        "os.environ['PATH']=os.pathsep.join(dirs)+os.pathsep+os.environ.get('PATH','')\n"
+        "dlls=set()\n"
+        "for b in dirs:\n"
+        "    dlls|={f.lower() for f in os.listdir(b)}\n"
+        "prov=[];ver='';sess='';err=''\n"
         "try:\n"
         "    import onnxruntime as o;prov=list(o.get_available_providers());ver=o.__version__\n"
-        "except Exception: pass\n"
-        "print(json.dumps({'prov':prov,'ver':ver,'dll':sorted(dll)}))\n"
+        "except Exception as e: err=repr(e)\n"
+        f"m={str(enc)!r}\n"
+        "if 'CUDAExecutionProvider' in prov and os.path.exists(m):\n"
+        "    try:\n"
+        "        so=o.SessionOptions();so.log_severity_level=4\n"
+        "        s=o.InferenceSession(m,so,providers=['CUDAExecutionProvider'])\n"
+        "        sess=(s.get_providers() or [''])[0]\n"
+        "    except Exception as e: err=str(e)[:160]\n"
+        "print(json.dumps({'prov':prov,'ver':ver,'dlls':sorted(dlls),"
+        "'sess':sess,'err':err}))\n"
     )
     r = run([str(py), "-c", code])
     if r is None or r.returncode != 0:
         return Result("onnx-cuda", OK, "ONNX 加速后端", "探测失败",
                       (r.stderr if r else "")[-200:])
     info = json.loads(r.stdout.strip().splitlines()[-1])
-    prov, ver, dll = info["prov"], info["ver"], info["dll"]
+    prov, ver, dlls = info["prov"], info["ver"], info["dlls"]
+    sess = info["sess"]
 
     if not prov:
         return Result("onnx-cuda", OK, "ONNX 加速后端", "未安装 onnxruntime",
@@ -402,13 +414,19 @@ def check_onnx_cuda():
     if has_dml:
         return Result("onnx-cuda", OK, "ONNX 加速后端", f"{ver}  DirectML")
 
-    # 有 CUDA EP 还要查 dll：缺 dll 时 ORT 只会在日志里刷红字然后静默退 CPU
-    lack = [n for n in ONNX_CUDA_DLLS if not any(d.startswith(n) for d in dll)]
+    # providers 里挂着 CUDA 不代表能用：cublas/cudnn/cufft 缺一个，
+    # ORT 只刷一行红字就静默退 CPU，所以要看文件 + 真建一次 session。
+    lack = [n for n in ONNX_CUDA_DLLS if not any(d.startswith(n) for d in dlls)]
     if lack:
         return Result("onnx-cuda", FAIL, "ONNX 加速后端",
                       f"{ver} 缺 CUDA 运行库：{', '.join(lack)}*.dll",
                       "运行本脚本自动补装 nvidia-*-cu12 wheel（约 700 MB，无需装 CUDA Toolkit）")
-    return Result("onnx-cuda", OK, "ONNX 加速后端", f"{ver}  CUDA 运行库齐全")
+    if sess and sess != "CUDAExecutionProvider":
+        return Result("onnx-cuda", FAIL, "ONNX 加速后端",
+                      f"{ver} CUDA 后端初始化失败，退回 {sess}",
+                      "运行本脚本自动补装 nvidia-*-cu12 wheel；仍失败则删 .venv 重装")
+    tail = "" if sess else "（无模型，仅检出运行库）"
+    return Result("onnx-cuda", OK, "ONNX 加速后端", f"{ver}  CUDA 可用{tail}")
 
 
 def check_llama():
