@@ -44,6 +44,8 @@ LLAMA_CUDART = {
     "cuda-12.4": ("cudart-llama-bin-win-cuda-12.4-x64.zip", 373),
     "cuda-13.3": ("cudart-llama-bin-win-cuda-13.3-x64.zip", 373),
 }
+# llama 的 CUDA 包只有 ggml-cuda.dll，运行库得自己对上 major 版本
+LLAMA_CUDA_MAJOR = {"cuda-12.4": "12", "cuda-13.3": "13"}
 
 LLAMA_DIR = ROOT / "qwen3_tts_gguf" / "inference" / "bin"
 LLAMA_FILES = ["llama.dll", "ggml.dll", "llama-server.exe"]
@@ -218,6 +220,20 @@ def has_cuda_runtime() -> bool:
                                for b in nv.glob("*/bin") for p in b.glob("*.dll")):
             return True
     return False
+
+
+def llama_cudart_ok(backend: str) -> bool:
+    """CUDA 版 llama.cpp 的 ggml-cuda.dll 依赖**同版本**的 cudart/cublas dll。
+
+    不能拿系统或 venv 里的 CUDA 运行库当判据：ONNX 那条链路走 pip 的 cu12 wheel，
+    而 llama 后端可能是 CUDA 13，版本对不上照样 Error 126，llama.cpp 会静默跳过
+    这个 backend，于是整条链路看起来"在上 GPU"其实全跑 CPU。
+    """
+    major = LLAMA_CUDA_MAJOR.get(backend)
+    if not major:
+        return True
+    names = (f"cudart64_{major}.dll", f"cublas64_{major}.dll", f"cublasLt64_{major}.dll")
+    return all((LLAMA_DIR / n).exists() for n in names)
 
 
 def detect_gpu():
@@ -440,6 +456,12 @@ def check_llama():
                       f"运行本脚本自动下载 {zipname} 到 {LLAMA_DIR.relative_to(ROOT)}")
     size = sum(p.stat().st_size for p in LLAMA_DIR.glob("*.dll")) / 2**20
     cur = bin_backend()
+    # be 不是 cuda-* 时版本无从判断，llama_cudart_ok 直接放行，不误报
+    if cur == "cuda" and not llama_cudart_ok(be):
+        major = LLAMA_CUDA_MAJOR.get(be, "13")
+        return Result("llama", FAIL, "llama.cpp 运行库",
+                      f"装了 CUDA 版但缺 CUDA {major} 运行库，ggml-cuda.dll 加载失败",
+                      "现在等于纯 CPU 推理；运行本脚本自动补 cudart（~373 MB，无需装 Toolkit）")
     detail = f"{LLAMA_DIR.relative_to(ROOT)}  {size:.0f} MB  后端 {cur or '未知'}"
     want = "cuda" if be.startswith("cuda") else "vulkan"
     if cur and cur != want:
@@ -661,11 +683,12 @@ def fix_llama():
     url = f"{LLAMA_REL}/{zipname}"
     say(C.dim(f"  设备：{g['name'] or '未识别'}（{g['reason'] or '默认'}）-> {label} 后端"))
 
-    # CUDA 包不含 cublas/cudart，本机没有 CUDA 运行时就顺手补一份
+    # CUDA 包不含 cublas/cudart，缺了就补一份（必须按 llama 后端的 major 版本判断，
+    # 不能只看系统里有没有 CUDA —— ONNX 的 cu12 wheel 满足不了 CUDA 13 的 llama 后端）
     cudart = None
-    if be.startswith("cuda") and not has_cuda_runtime():
+    if be.startswith("cuda") and not llama_cudart_ok(be):
         crt, crt_mb = LLAMA_CUDART[be]
-        say(C.dim(f"  本机没装 CUDA 运行时，需要额外下载 {crt}（~{crt_mb} MB）"))
+        say(C.dim(f"  后端缺 CUDA {LLAMA_CUDA_MAJOR[be]} 运行库，需要额外下载 {crt}（~{crt_mb} MB）"))
         cudart = (f"{LLAMA_REL}/{crt}", ROOT / ".cache" / crt, crt_mb)
 
     tmp = ROOT / ".cache" / zipname
