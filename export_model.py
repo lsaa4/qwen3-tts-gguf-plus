@@ -139,7 +139,8 @@ INTERMEDIATE_GLOBS = [
     "*.f16.gguf",
 ]
 
-EXPORT_DEPS = ["torch", "torchaudio", "onnx", "onnxruntime", "safetensors", "transformers", "numpy"]
+EXPORT_DEPS = ["torch", "torchaudio", "onnx", "onnxruntime", "safetensors", "transformers",
+               "numpy", "librosa", "sox", "einops"]
 MODULE_PKG = {"onnxruntime": "onnxruntime"}   # 其余 import 名和包名一致
 
 # 与 pyproject.toml 的 [project.optional-dependencies].export 保持同步。
@@ -150,6 +151,8 @@ EXPORT_SPECS = [
     "transformers==4.57.6", "accelerate==1.12.0",
     "onnx>=1.22.0", "onnxscript>=0.7.1",
     "sentencepiece>=0.2.2", "einops>=0.8.2",
+    # Qwen3-TTS-main（上游推理包）顶层就 import 这两个
+    "librosa>=0.10", "sox",
 ]
 QUANTIZER = ROOT / "qwen3_tts_gguf" / "inference" / "bin" / "llama-quantize.exe"
 
