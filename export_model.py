@@ -146,15 +146,120 @@ QUANTIZER = ROOT / "qwen3_tts_gguf" / "inference" / "bin" / "llama-quantize.exe"
 
 # ---------------------------------------------------------------- 前置检查
 
+SKIP_DIRS = {
+    "windows", "program files", "program files (x86)", "programdata", "$recycle.bin",
+    "system volume information", "appdata", "node_modules", ".git", "__pycache__",
+    "anaconda3", "miniconda3", "venv", ".venv", "site-packages", "recovery",
+    "perflogs", "msocache", "intel", "amd", "nvidia",
+}
+
+
+def _drives() -> list[Path]:
+    """Windows 上所有存在的盘符。"""
+    if os.name != "nt":
+        return [Path("/")]
+    return [Path(f"{c}:/") for c in "CDEFGHIJKLMNOPQRSTUVWXYZ"
+            if Path(f"{c}:/").exists()]
+
+
+def _name_match(dirname: str, name: str) -> bool:
+    """容忍 "xxx (1)" / "xxx - 副本" 这类名字。"""
+    d = dirname.strip().lower()
+    n = name.lower()
+    return d == n or d.startswith(n + " ") or d.startswith(n + "(") or d.startswith(n + "-")
+
+
+def _looks_like_model(d: Path, name: str) -> bool:
+    low = d.name.lower()
+    if low.startswith("models--") and low.endswith("--" + name.lower()):
+        snaps = d / "snapshots"          # HF 缓存：实体在 snapshots/<hash> 下
+        if snaps.is_dir():
+            for sub in snaps.iterdir():
+                if (sub / "model.safetensors").exists():
+                    return True
+        return False
+    return _name_match(d.name, name) and (d / "model.safetensors").exists()
+
+
+def _scan(root: Path, name: str, depth: int = 4, budget: float = 15.0) -> Path | None:
+    """广度优先、剪掉系统目录的浅层搜索，单个盘最多花 budget 秒。"""
+    stack = [(root, 0)]
+    t0 = time.time()
+    while stack:
+        if time.time() - t0 > budget:
+            return None
+        d, lv = stack.pop()
+        try:
+            if _looks_like_model(d, name):
+                low = d.name.lower()
+                if low.startswith("models--"):
+                    for sub in sorted((d / "snapshots").iterdir()):
+                        if (sub / "model.safetensors").exists():
+                            return sub
+                return d
+        except OSError:
+            continue
+        if lv >= depth:
+            continue
+        try:
+            with os.scandir(d) as it:
+                for e in it:
+                    try:
+                        if not e.is_dir(follow_symlinks=False):
+                            continue
+                    except OSError:
+                        continue
+                    n = e.name.lower()
+                    if n in SKIP_DIRS or n.startswith("$") or n.startswith("."):
+                        continue
+                    stack.append((Path(e.path), lv + 1))
+        except OSError:
+            continue
+    return None
+
+
 def find_source(name: str) -> Path | None:
-    """按 export_config 的探测顺序找官方模型目录。"""
-    home = os.environ.get("QWEN_MODEL_HOME")
-    cands = [Path(home) if home else None,
-             Path(r"D:\qwen3-tts\models"),
-             Path.home() / ".cache/modelscope/hub/models/Qwen"]
-    for c in cands:
-        if c is not None and (c / name).is_dir():
-            return c / name
+    """找官方模型目录：环境变量 → 项目内 → 各盘常见位置 → 全盘浅扫。"""
+    env = os.environ.get("QWEN_MODEL_HOME") or os.environ.get("QWEN_MODEL_DIR")
+    if env:
+        e = Path(env).expanduser()
+        for cand in (e, e / name):
+            if cand.is_dir() and (cand / "model.safetensors").exists():
+                return cand
+    # 项目自己带的 models/ 和它的上一层
+    for cand in (ROOT / "models" / name, ROOT.parent / name, ROOT.parent / "models" / name):
+        if (cand / "model.safetensors").exists():
+            return cand
+    # 各盘根 + 常见的模型存放层
+    roots = _drives()
+    near = ["model", "models", "Models", "ai", "AI", "llm", "LLM",
+            "qwen3-tts/models", "qwen3-tts", "huggingface", "下载", "Downloads"]
+    for drv in roots:
+        for sub in near:
+            d = drv / sub / name
+            if (d / "model.safetensors").exists():
+                return d
+    # 桌面 / 下载 / 文档 / 缓存
+    home = Path.home()
+    for sub in ("Desktop", "Downloads", "Documents", "桌面", "下载", "文档"):
+        d = home / sub / name
+        if (d / "model.safetensors").exists():
+            return d
+    for cache in (home / ".cache/modelscope/hub/models/Qwen",
+                  home / ".cache/huggingface/hub"):
+        if cache.is_dir():
+            hit = _scan(cache, name, depth=5)
+            if hit:
+                return hit
+    # 最后兜底：全盘浅扫（总预算 25 秒，找到就停）
+    t_all = time.time()
+    for drv in roots:
+        left = 25.0 - (time.time() - t_all)
+        if left <= 1:
+            break
+        hit = _scan(drv, name, depth=5, budget=left)
+        if hit:
+            return hit
     return None
 
 
@@ -180,7 +285,7 @@ def download_source(name: str) -> Path | None:
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=False)
     if r.returncode != 0:
         say(C.err("  下载失败。可手动从 Hugging Face / ModelScope 下载，放到 "
-                  r"D:\\qwen3-tts\\models 或设 QWEN_MODEL_HOME 指过去。"))
+                  "任意位置或设 QWEN_MODEL_HOME / QWEN_MODEL_DIR 指过去。"))
         return None
     return find_source(name)
 
@@ -348,20 +453,28 @@ def main() -> int:
 
     # 1. 源模型
     section("定位源模型")
-    src = Path(args.src).expanduser() if args.src else find_source(src_name)
-    # 允许直接指到父目录（里面套着同名模型文件夹）
-    if src and not (src / "model.safetensors").exists() and (src / src_name).is_dir():
-        src = src / src_name
-    if src is not None and not src.is_dir():
-        say(C.err(f"  --src 指过去不是目录：{src}"))
-        return 2
+    if args.src:
+        src = Path(args.src).expanduser()
+        # 允许指到父目录（里面套着同名模型文件夹）
+        if not (src / "model.safetensors").exists() and (src / src_name).is_dir():
+            src = src / src_name
+        if not src.is_dir():
+            say(C.err(f"  --src 指过去不是目录：{src}"))
+            return 2
+        if not (src / "model.safetensors").exists():
+            say(C.err(f"  这里没有 model.safetensors：{src}"))
+            say(C.dim("  --src 要指到含 model.safetensors、config.json、speech_tokenizer/ 的那一层。"))
+            return 2
+    else:
+        say(C.dim("  自动搜索各个盘 …（几秒钟，最多十几秒）"))
+        src = find_source(src_name)
     if src is None:
-        if args.no_download:
-            say(C.err(f"  没找到 {src_name}，也没有允许自动下载。"))
-            return 2
-        src = download_source(src_name)
-        if src is None:
-            return 2
+        say(C.err(f"  没找到 {src_name}"))
+        say(C.dim("  三种办法，任选一个："))
+        say(C.dim("    1) 加 --src 指过去（桌面、H 盘都行）"))
+        say(C.dim("    2) 设环境变量 QWEN_MODEL_HOME 指向存放模型的目录"))
+        say(C.dim("    3) 不加 --no-download 重跑，让脚本走 modelscope 下载"))
+        return 2
     nfiles = sum(1 for _ in src.rglob("*") if _.is_file())
     say(f"  {C.ok('✓')} {src}")
     say(C.dim(f"    {nfiles} 个文件，{human(sum(f.stat().st_size for f in src.rglob('*') if f.is_file()))}"))
@@ -422,6 +535,7 @@ def main() -> int:
     env = dict(os.environ)
     env["QWEN_EXPORT_MODEL"] = key
     env["QWEN_MODEL_HOME"] = str(src.parent)
+    env["QWEN_MODEL_DIR"] = str(src)          # 目录名不标准（xxx (1)）也能导
     env["QWEN_EXPORT_DIR"] = str(out_dir)
     env["PYTHONIOENCODING"] = "utf-8"
 

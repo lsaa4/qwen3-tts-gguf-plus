@@ -15,6 +15,13 @@ def _pick_model_home():
 
 
 model_home = _pick_model_home()
+# 源模型目录可直接指定（--src 用）；目录名不标准时靠它兜底
+_explicit_src = os.environ.get("QWEN_MODEL_DIR")
+
+
+def _src(name):
+    return Path(_explicit_src) if _explicit_src else model_home / name
+
 # 导出结果落在哪儿：默认项目根目录下的 model-base 等；
 # QWEN_EXPORT_DIR 给了就精确用这个目录（一次导一个模型，不再自动追加子目录名）
 dest_home = Path(__file__).parent
@@ -31,23 +38,23 @@ class ModelConfig:
 
 class Models:
     base = ModelConfig(
-        model_home / 'Qwen3-TTS-12Hz-1.7B-Base',
+        _src('Qwen3-TTS-12Hz-1.7B-Base'),
         _dest('model-base')
     )
     custom = ModelConfig(
-        model_home / 'Qwen3-TTS-12Hz-1.7B-CustomVoice',
+        _src('Qwen3-TTS-12Hz-1.7B-CustomVoice'),
         _dest('model-custom')
     )
     design = ModelConfig(
-        model_home / 'Qwen3-TTS-12Hz-1.7B-VoiceDesign',
+        _src('Qwen3-TTS-12Hz-1.7B-VoiceDesign'),
         _dest('model-design')
     )
     base_small = ModelConfig(
-        model_home / 'Qwen3-TTS-12Hz-0.6B-Base',
+        _src('Qwen3-TTS-12Hz-0.6B-Base'),
         _dest('model-base-small')
     )
     custom_small = ModelConfig(
-        model_home / 'Qwen3-TTS-12Hz-0.6B-CustomVoice',
+        _src('Qwen3-TTS-12Hz-0.6B-CustomVoice'),
         _dest('model-custom-small')
     )
 
