@@ -130,7 +130,7 @@ modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
 modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 ```
 
-下载位置默认在 `~/.cache/modelscope/hub/models/Qwen`，导出脚本会自动探测；放在别处就设环境变量 `QWEN_MODEL_HOME` 指过去（见[导出模型](#导出模型)）。
+权重放哪儿都行，不用管。导出脚本会把所有盘符都扫一遍（深度 5，总预算 25 秒），桌面、`H:\weights\`、`D:\AI\models\` 这类位置都能自己认出来，目录名带 ` (1)` 后缀也认。实在找不到，加 `--src` 指过去就行。
 
 ### 3. 启动
 
@@ -435,16 +435,19 @@ Windows 上双击 `export-model.bat` 等价。它会依次确认：源模型在�
 
 ### 配置路径
 
-`export_config.py` 决定从哪儿读官方模型、往哪儿写导出结果。源目录按这个顺序自动探测：
+`export_config.py` 决定从哪儿读官方模型、往哪儿写导出结果。源目录按这个顺序找：
 
-1. 环境变量 `QWEN_MODEL_HOME`
-2. `D:\qwen3-tts\models`
-3. `~/.cache/modelscope/hub/models/Qwen`
+1. 环境变量 `QWEN_MODEL_DIR`（直接指到模型目录本身）
+2. 环境变量 `QWEN_MODEL_HOME`（指到存放模型的上一层）
+3. 项目内 `models\<模型名>`、项目上一层的同名目录
+4. 各盘符根下的 `models` / `AI` / `llm` / `qwen3-tts` 等常见层级
+5. 桌面 / 下载 / 文档 / ModelScope 与 HuggingFace 缓存
+6. 所有盘符浅层搜索（深度 5，找到即停）
 
-都不对就在命令行里临时指定：
+所以权重放桌面或 H 盘都能自动找到。也可以直接指定：
 
 ```bash
-set QWEN_MODEL_HOME=E:\models\Qwen
+set QWEN_MODEL_DIR=H:\weights\Qwen3-TTS-12Hz-1.7B-Base
 ```
 
 输出目录固定是项目根下的 `model-base` / `model-custom` / `model-design` / `model-base-small` / `model-custom-small`。文件里 `model = Models.base` 这一行切换默认导出哪个模型。

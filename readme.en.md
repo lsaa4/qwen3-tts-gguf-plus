@@ -130,7 +130,7 @@ modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
 modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
 ```
 
-Files land in `~/.cache/modelscope/hub/models/Qwen` by default, which the export scripts detect automatically. Anywhere else: set `QWEN_MODEL_HOME` (see [Exporting models](#exporting-models)).
+Put the weights anywhere — the export script scans every drive (depth 5, 25 s budget) and picks the model up from the Desktop, `H:\weights\`, `D:\AI\models\` or a folder renamed with a ` (1)` suffix. If it still misses, point at it with `--src`.
 
 ### 3. Launch
 
@@ -433,16 +433,19 @@ What the one-command path does, if you'd rather drive it yourself.
 
 ### Paths
 
-`export_config.py` decides where official models are read from and where exports go. The source is probed in this order:
+`export_config.py` decides where official models are read from and where exports go. The source is located in this order:
 
-1. Environment variable `QWEN_MODEL_HOME`
-2. `D:\qwen3-tts\models`
-3. `~/.cache/modelscope/hub/models/Qwen`
+1. `QWEN_MODEL_DIR` (points at the model folder itself)
+2. `QWEN_MODEL_HOME` (points at the parent folder)
+3. `<repo>\models\<name>`, and the same name one level above the repo
+4. common layers on every drive (`models`, `AI`, `llm`, `qwen3-tts`, …)
+5. Desktop / Downloads / Documents / ModelScope and HuggingFace caches
+6. shallow scan of every drive (depth 5, early exit)
 
-Set it explicitly when needed:
+A model on the Desktop or on drive H: is therefore found automatically. Or be explicit:
 
 ```batch
-set QWEN_MODEL_HOME=E:\models\Qwen
+set QWEN_MODEL_DIR=H:\weights\Qwen3-TTS-12Hz-1.7B-Base
 ```
 
 Output always goes to `model-base` / `model-custom` / `model-design` / `model-base-small` / `model-custom-small` in the project root. Switch the default target with the line `model = Models.base`.
