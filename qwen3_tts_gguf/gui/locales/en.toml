@@ -54,6 +54,9 @@ batch_status = "Batch {i}/{n} ({k} streams) generating…"
 stopped = "Stopped {ok}/{n} streams → {dir}"
 done = "Done {ok}/{n} streams{rtf} → {dir}"
 gen_error = "Generation error: {msg}"
+merge_audio = "Merge into one file"
+merged_note = ", merged {name} ({dur}s)"
+merge_failed = ", merge failed: {msg}"
 
 [clone]
 source = "Clone Source"

@@ -54,6 +54,9 @@ batch_status = "Stapel {i}/{n} ({k} Streams) wird generiert…"
 stopped = "Angehalten, {ok}/{n} Streams → {dir}"
 done = "Fertig, {ok}/{n} Streams{rtf} → {dir}"
 gen_error = "Fehler bei der Generierung: {msg}"
+merge_audio = "Zu einer Datei zusammenführen"
+merged_note = ", zusammengeführt: {name} ({dur}s)"
+merge_failed = ", Zusammenführen fehlgeschlagen: {msg}"
 
 [clone]
 source = "Klon-Quelle"

@@ -19,6 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
 
+import numpy as np
+import soundfile as sf
 import ttkbootstrap as ttkb
 import windnd
 from ttkbootstrap.constants import *
@@ -26,6 +28,7 @@ from ttkbootstrap.constants import *
 from qwen3_tts_gguf import logger
 from qwen3_tts_gguf.inference import TTSEngine, TTSConfig
 from qwen3_tts_gguf.inference.batch import BatchRunner
+from qwen3_tts_gguf.inference.schema.constants import SAMPLE_RATE
 
 from .i18n import t
 from .scroll_page import ScrollPage
@@ -101,6 +104,37 @@ def text_slug(text, n_words=10):
             out += " "
         out += w
     return out
+
+
+# ---------- 合成完整语音 ----------
+# 每句独立推理，句末自带收尾静音；统一补一小段间隔 + 首尾淡入淡出，拼起来才像一口气读完
+MERGE_GAP_S = 0.10
+MERGE_FADE_SAMPLES = int(0.005 * SAMPLE_RATE)
+
+
+def _fade_edges(x, n=MERGE_FADE_SAMPLES):
+    """首尾各 n 点线性淡入/淡出，消除拼接爆音（返回副本，不动原数组）"""
+    x = np.asarray(x, dtype=np.float32).copy()
+    n = min(n, len(x) // 2)
+    if n < 2:
+        return x
+    ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
+    x[:n] *= ramp
+    x[-n:] *= ramp[::-1]
+    return x
+
+
+def merge_audios(parts, gap_s: float = MERGE_GAP_S):
+    """按顺序拼接各句 PCM，句间补 gap_s 静音；返回 float32 单声道数组"""
+    if not parts:
+        return None
+    gap = np.zeros(int(gap_s * SAMPLE_RATE), dtype=np.float32)
+    chunks = []
+    for i, p in enumerate(parts):
+        if i:
+            chunks.append(gap)
+        chunks.append(_fade_edges(p))
+    return np.concatenate(chunks)
 
 
 def parse_task_groups(text):
@@ -300,6 +334,10 @@ class TTSPageBase(ttkb.Frame):
         self.n_paths = tk.IntVar(value=32)
         ttkb.Label(bar, text=t("gen.n_paths")).pack(side=LEFT, padx=(0, 6))
         ttkb.Spinbox(bar, from_=1, to=32, textvariable=self.n_paths, width=5).pack(side=LEFT)
+        # 合成完整语音：勾选后除逐句 wav 外，再额外拼一条 000-merged.wav
+        self.merge_audio = tk.BooleanVar(value=True)
+        ttkb.Checkbutton(bar, text=t("gen.merge_audio"), variable=self.merge_audio,
+                         bootstyle="round-toggle").pack(side=LEFT, padx=(18, 0))
 
     # ---------- 事件管道 ----------
 
@@ -468,7 +506,8 @@ class TTSPageBase(ttkb.Frame):
         self._gen_thread = threading.Thread(
             target=self._gen_worker,
             kwargs=dict(engine=self.engine, text=text, cfg=cfg, n_ctx=n_ctx,
-                        n_paths=n_paths, out_root=self.output_dir.get(), src=src),
+                        n_paths=n_paths, out_root=self.output_dir.get(), src=src,
+                        merge_audio=bool(self.merge_audio.get())),
             daemon=True)
         self._gen_thread.start()
 
@@ -484,7 +523,7 @@ class TTSPageBase(ttkb.Frame):
         """调对应的 BatchRunner 批量接口。子类实现"""
         raise NotImplementedError
 
-    def _gen_worker(self, engine, text, cfg, n_ctx, n_paths, out_root, src):
+    def _gen_worker(self, engine, text, cfg, n_ctx, n_paths, out_root, src, merge_audio=False):
         """后台线程: 解析任务 -> 分批生成 -> 按序号落盘 wav+json"""
         try:
             tasks = self._make_tasks(text, cfg, src)
@@ -501,6 +540,7 @@ class TTSPageBase(ttkb.Frame):
 
             done = ok = idx = 0
             total_frames = 0
+            merged_parts = [] if merge_audio else None
             t_start = time.time()
             batches = [tasks[i:i + n_paths] for i in range(0, len(tasks), n_paths)]
             for bi, batch in enumerate(batches):
@@ -537,6 +577,10 @@ class TTSPageBase(ttkb.Frame):
                         stem = f"{idx:03d}-{slug}" if slug else f"{idx:03d}"
                         r.save(str(out_dir / f"{stem}.wav"))
                         r.save(str(out_dir / f"{stem}.json"))
+                        if merged_parts is not None:
+                            wav = r.audio
+                            if wav is not None and len(wav):
+                                merged_parts.append(np.asarray(wav, dtype=np.float32))
                         ok += 1
                     else:
                         logger.warning(f"[GUI] 第 {idx} 路已取消，未落盘")
@@ -545,12 +589,25 @@ class TTSPageBase(ttkb.Frame):
 
             dt_total = time.time() - t_start
             total_audio_s = total_frames / 12.5  # 每秒 12.5 帧
+            merged_note = ""
+            if merge_audio and merged_parts and not self.cancel_event.is_set():
+                # 逐句 wav 已落盘，这里再拼一条完整语音（句间补静音 + 首尾淡入淡出）
+                try:
+                    audio = merge_audios(merged_parts)
+                    name = "000-merged.wav"
+                    sf.write(str(out_dir / name), audio, SAMPLE_RATE)
+                    dur = len(audio) / SAMPLE_RATE
+                    merged_note = t("gen.merged_note").format(name=name, dur=f"{dur:.1f}")
+                    logger.info(f"[GUI] 已合成完整语音 {name}: {len(merged_parts)} 段, {dur:.1f}s")
+                except Exception as e:
+                    logger.exception("合成完整语音失败")
+                    merged_note = t("gen.merge_failed").format(msg=e)
             if self.cancel_event.is_set():
                 # 停止时不算 RTF，数据不完整
                 self.ui_queue.put(("status", t("gen.stopped").format(ok=ok, n=len(tasks), dir=out_dir)))
             else:
                 rtf = f", RTF {dt_total / total_audio_s:.3f}" if total_audio_s > 0 else ""
-                self.ui_queue.put(("status", t("gen.done").format(ok=ok, n=len(tasks), rtf=rtf, dir=out_dir)))
+                self.ui_queue.put(("status", t("gen.done").format(ok=ok, n=len(tasks), rtf=rtf, dir=out_dir) + merged_note))
         except Exception as e:
             logger.exception("生成失败")
             self.ui_queue.put(("error", t("gen.gen_error").format(msg=e)))

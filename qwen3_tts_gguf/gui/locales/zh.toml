@@ -54,6 +54,9 @@ batch_status = "批次 {i}/{n}（{k} 路）生成中…"
 stopped = "已停止 {ok}/{n} 路 → {dir}"
 done = "完成 {ok}/{n} 路{rtf} → {dir}"
 gen_error = "生成异常: {msg}"
+merge_audio = "合成完整语音"
+merged_note = "，已合成完整语音 {name}（{dur}s）"
+merge_failed = "，合成失败: {msg}"
 
 [clone]
 source = "克隆源"
