@@ -48,6 +48,22 @@ LLAMA_CUDART = {
 LLAMA_DIR = ROOT / "qwen3_tts_gguf" / "inference" / "bin"
 LLAMA_FILES = ["llama.dll", "ggml.dll", "llama-server.exe"]
 
+# N 卡 ONNX 加速方案：onnxruntime-gpu 的 Windows 包不捆绑 cuBLAS/cuDNN/cuFFT，
+# 全部靠 pip 的 nvidia-* wheel 提供，用户不需要装 CUDA Toolkit。
+# 版本要点：onnxruntime-gpu 1.25.x 认 CUDA 12.x；1.29 起硬绑 CUDA 13.x，
+# 而 PyPI 上没有 cu13 的 cuDNN wheel，所以这里钉 1.25。
+ORT_CUDA_SPEC = "onnxruntime-gpu>=1.25.0,<1.26"
+ONNX_CUDA_WHEELS = [
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12",
+    "nvidia-cufft-cu12",
+    "nvidia-curand-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cuda-nvrtc-cu12",
+]
+# CUDA EP 运行时会按需加载这几个 dll，缺一个就静默退回 CPU
+ONNX_CUDA_DLLS = ("cublaslt64", "cudnn64", "cufft64")
+
 # 默认（Vulkan）包，hint 文案里引用
 LLAMA_ZIP = f"llama-{LLAMA_TAG}-{LLAMA_BACKENDS['vulkan'][0]}"
 LLAMA_URL = f"{LLAMA_REL}/{LLAMA_ZIP}"
@@ -185,14 +201,23 @@ def _ps(cmd, timeout=20):
 
 
 def has_cuda_runtime() -> bool:
-    """本机是否已有 cublas/cudart，有就不用再下 373 MB 的 cudart 包。"""
+    """本机是否已有 cublas 运行库（系统 CUDA、System32 或 pip 的 nvidia wheel）。"""
     if os.environ.get("CUDA_PATH"):
         return True
     names = ("cublas64_13.dll", "cublas64_12.dll", "cublasLt64_13.dll", "cublasLt64_12.dll")
     if any(shutil.which(n) for n in names):
         return True
     sysdir = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32"
-    return any((sysdir / n).exists() for n in names)
+    if any((sysdir / n).exists() for n in names):
+        return True
+    # pip 装的 nvidia-*-cu12 wheel（本项目 CUDA 方案默认走这条）
+    py = venv_python()
+    if py.exists():
+        nv = py.parent.parent / "Lib" / "site-packages" / "nvidia"
+        if nv.is_dir() and any(p.name.lower().startswith("cublaslt64")
+                               for b in nv.glob("*/bin") for p in b.glob("*.dll")):
+            return True
+    return False
 
 
 def detect_gpu():
@@ -331,9 +356,59 @@ def check_packages():
     accel = [p for p in prov if p in ("DmlExecutionProvider", "CUDAExecutionProvider")]
     if accel:
         return Result("packages", OK, "Python 依赖", f"齐全，加速 {', '.join(accel)}")
-    return Result("packages", WARN, "Python 依赖",
-                  "齐全，但只有 CPU provider（会慢 4 倍左右）",
-                  "N 卡：uv sync --extra cuda / pip install onnxruntime-gpu")
+    return Result("packages", OK, "Python 依赖", "齐全（ONNX 加速见下一项）")
+
+
+def check_onnx_cuda():
+    """检查 onnxruntime 的 CUDA 后端是否真的能用（providers 有名字 ≠ dll 能加载）。"""
+    py = venv_python()
+    if not py.exists():
+        return Result("onnx-cuda", OK, "ONNX 加速后端", "跳过（无 .venv）")
+
+    code = (
+        "import json,os,sys\n"
+        "sp=os.path.join(sys.prefix,'Lib','site-packages')\n"
+        "nv=os.path.join(sp,'nvidia')\n"
+        "dll=set()\n"
+        "if os.path.isdir(nv):\n"
+        "    for d in os.listdir(nv):\n"
+        "        b=os.path.join(nv,d,'bin')\n"
+        "        if os.path.isdir(b):\n"
+        "            dll|={f.lower() for f in os.listdir(b)}\n"
+        "prov=[];ver=''\n"
+        "try:\n"
+        "    import onnxruntime as o;prov=list(o.get_available_providers());ver=o.__version__\n"
+        "except Exception: pass\n"
+        "print(json.dumps({'prov':prov,'ver':ver,'dll':sorted(dll)}))\n"
+    )
+    r = run([str(py), "-c", code])
+    if r is None or r.returncode != 0:
+        return Result("onnx-cuda", OK, "ONNX 加速后端", "探测失败",
+                      (r.stderr if r else "")[-200:])
+    info = json.loads(r.stdout.strip().splitlines()[-1])
+    prov, ver, dll = info["prov"], info["ver"], info["dll"]
+
+    if not prov:
+        return Result("onnx-cuda", OK, "ONNX 加速后端", "未安装 onnxruntime",
+                      "见上一条依赖检查")
+
+    has_cuda = "CUDAExecutionProvider" in prov
+    has_dml = "DmlExecutionProvider" in prov
+    if not has_cuda and not has_dml:
+        return Result("onnx-cuda", WARN, "ONNX 加速后端",
+                      f"{ver} 只有 CPU provider（合成会慢 3-4 倍）",
+                      "运行本脚本自动换成 CUDA 版；A 卡用户装 onnxruntime-directml")
+
+    if has_dml:
+        return Result("onnx-cuda", OK, "ONNX 加速后端", f"{ver}  DirectML")
+
+    # 有 CUDA EP 还要查 dll：缺 dll 时 ORT 只会在日志里刷红字然后静默退 CPU
+    lack = [n for n in ONNX_CUDA_DLLS if not any(d.startswith(n) for d in dll)]
+    if lack:
+        return Result("onnx-cuda", FAIL, "ONNX 加速后端",
+                      f"{ver} 缺 CUDA 运行库：{', '.join(lack)}*.dll",
+                      "运行本脚本自动补装 nvidia-*-cu12 wheel（约 700 MB，无需装 CUDA Toolkit）")
+    return Result("onnx-cuda", OK, "ONNX 加速后端", f"{ver}  CUDA 运行库齐全")
 
 
 def check_llama():
@@ -408,6 +483,7 @@ def gather():
         check_python(),
         check_venv(),
         check_packages(),
+        check_onnx_cuda(),
         check_llama(),
         check_model(),
         check_ffmpeg(),
@@ -598,6 +674,53 @@ def fix_llama():
     return all((LLAMA_DIR / f).exists() for f in LLAMA_FILES)
 
 
+def _pip_install(pkgs, timeout=2400) -> bool:
+    """在 .venv 里装包：uv 建的 venv 没有 pip，所以优先走 uv pip。"""
+    py = venv_python()
+    uv = shutil.which("uv")
+    if uv:
+        r = run([uv, "pip", "install", "--python", str(py), *pkgs],
+                cwd=str(ROOT), timeout=timeout)
+        if r and r.returncode == 0:
+            return True
+        say(C.dim("  uv pip 失败，改用 pip …"))
+    r = run([str(py), "-m", "pip", "install", *pkgs, "-i", PIP_MIRROR], timeout=timeout)
+    return bool(r and r.returncode == 0)
+
+
+def _ort_providers() -> list:
+    py = venv_python()
+    if not py.exists():
+        return []
+    r = run([str(py), "-c",
+             "import onnxruntime as o;print('|'.join(o.get_available_providers()))"])
+    return (r.stdout or "").strip().split("|") if r and r.returncode == 0 else []
+
+
+def fix_onnx_cuda():
+    """装 onnxruntime-gpu + pip 版 CUDA 运行库（不需要 CUDA Toolkit）。"""
+    py = venv_python()
+    if not py.exists():
+        say(C.err("  没有 .venv，先修「虚拟环境」"))
+        return False
+    elif "DmlExecutionProvider" in _ort_providers():
+        say(C.dim("  当前是 DirectML 版，保持不动（A 卡 / 不想动 CUDA 时更省事）"))
+        return True
+
+    pkgs = [ORT_CUDA_SPEC, *ONNX_CUDA_WHEELS]
+    say(C.dim(f"  安装 {ORT_CUDA_SPEC} + {len(ONNX_CUDA_WHEELS)} 个 NVIDIA 运行库 wheel"
+              "（约 700 MB，首次 3-10 分钟）…"))
+    if _pip_install(pkgs):
+        say(C.dim("  已安装，正在复核 …"))
+        res = check_onnx_cuda()
+        if res.level != FAIL:
+            return True
+        say(C.err(f"  {res.detail}"))
+        return False
+    say(C.err("  安装失败"))
+    return False
+
+
 def fix_ffmpeg():
     tmp = ROOT / ".cache" / "ffmpeg.zip"
     if not tmp.exists():
@@ -662,7 +785,7 @@ def main():
     say(C.bold("开始修复"))
     fixed = 0
     for r in todo:
-        need_fix = r.key in ("venv", "packages", "llama", "ffmpeg")
+        need_fix = r.key in ("venv", "packages", "onnx-cuda", "llama", "ffmpeg")
         if not need_fix:
             say()
             if r.level == WARN:
@@ -684,6 +807,8 @@ def main():
         try:
             if r.key in ("venv", "packages"):
                 ok = fix_venv()
+            elif r.key == "onnx-cuda":
+                ok = fix_onnx_cuda()
             elif r.key == "llama":
                 ok = fix_llama()
             elif r.key == "ffmpeg":

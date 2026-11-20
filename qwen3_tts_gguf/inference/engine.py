@@ -60,8 +60,8 @@ class TTSEngine:
             self.speaker_encoder = None
             if self.paths["codec_enc_onnx"].exists() and self.paths["spk_enc_onnx"].exists():
                 t_enc = time.time()
-                self.codec_encoder = CodecEncoder(str(self.paths["codec_enc_onnx"]))
-                self.speaker_encoder = SpeakerEncoder(str(self.paths["spk_enc_onnx"]))
+                self.codec_encoder = CodecEncoder(str(self.paths["codec_enc_onnx"]), onnx_provider=onnx_provider)
+                self.speaker_encoder = SpeakerEncoder(str(self.paths["spk_enc_onnx"]), onnx_provider=onnx_provider)
                 if verbose: print(f"[Engine] 编码器加载完成 (耗时: {time.time()-t_enc:.2f}s)")
 
             # 3. 解码后端: 子进程 (流式播放场景) 或进程内 (GUI/离线批量场景)

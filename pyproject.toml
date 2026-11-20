@@ -21,8 +21,18 @@ dependencies = [
 [project.optional-dependencies]
 # ONNX 运行时二选一
 dml = ["onnxruntime-directml>=1.24.4"]
-cuda = ["onnxruntime-gpu>=1.29.0"]
-# 仅导出/量化（根目录 1x/2x 号脚本）需要；torch 走 torch-cu132 源
+# N 卡 CUDA：onnxruntime-gpu 1.25 起才支持 CUDA 12.x，1.29 强制 CUDA 13.x，
+# 这里钉 1.25 并显式带上 pip 的 CUDA 12 运行库 wheel，
+# 用户无需装 CUDA Toolkit（见 qwen3_tts_gguf/cuda_dll.py）。
+cuda = [
+    "onnxruntime-gpu>=1.25.0,<1.26",
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12",
+    "nvidia-cufft-cu12",
+    "nvidia-curand-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cuda-nvrtc-cu12",
+]# 仅导出/量化（根目录 1x/2x 号脚本）需要；torch 走 torch-cu132 源
 export = [
     "torch>=2.10",
     "torchaudio>=2.10",

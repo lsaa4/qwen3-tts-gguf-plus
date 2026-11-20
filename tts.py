@@ -83,7 +83,7 @@ def main():
 
     from qwen3_tts_gguf.inference import TTSEngine, TTSConfig
 
-    provider = "CPU" if args.cpu_decode else "DML"
+    provider = "CPU" if args.cpu_decode else "GPU"
     t0 = time.time()
     engine = TTSEngine(model_dir="model-base", onnx_provider=provider, subprocess_decoder=False, verbose=False)
     stream = engine.create_stream()

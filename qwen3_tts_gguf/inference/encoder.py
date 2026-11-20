@@ -6,11 +6,26 @@ from . import logger
 from .schema.result import TTSResult
 from .utils.mel import MelExtractor
 
+def pick_providers(onnx_provider: str = 'CPU'):
+    """按用户选择挑 ONNX provider，GPU 不可用时回退 CPU。"""
+    available = ort.get_available_providers()
+    prov = (onnx_provider or 'CPU').upper()
+    if prov in ('GPU', 'CUDA'):
+        for p in ('CUDAExecutionProvider', 'DmlExecutionProvider'):
+            if p in available:
+                return [p, 'CPUExecutionProvider']
+    elif prov == 'DML' and 'DmlExecutionProvider' in available:
+        return ['DmlExecutionProvider', 'CPUExecutionProvider']
+    elif prov in ('TRT', 'TENSORRT') and 'TensorrtExecutionProvider' in available:
+        return ['TensorrtExecutionProvider', 'CPUExecutionProvider']
+    return ['CPUExecutionProvider']
+
+
 class CodecEncoder:
     """音频码本编码器：将原始音频转换为 Codec IDs。"""
-    def __init__(self, onnx_path: str):
+    def __init__(self, onnx_path: str, onnx_provider: str = 'CPU'):
         self.onnx_path = onnx_path
-        providers = ['CPUExecutionProvider']
+        providers = pick_providers(onnx_provider)
 
         sess_opts = ort.SessionOptions()
         sess_opts.log_severity_level = 3
@@ -42,9 +57,9 @@ class CodecEncoder:
 
 class SpeakerEncoder:
     """说话人特征编码器：将原始音频转换为 Speaker Embedding。"""
-    def __init__(self, onnx_path: str):
+    def __init__(self, onnx_path: str, onnx_provider: str = 'CPU'):
         self.onnx_path = onnx_path
-        providers = ['CPUExecutionProvider']
+        providers = pick_providers(onnx_provider)
 
         sess_opts = ort.SessionOptions()
         sess_opts.log_severity_level = 3

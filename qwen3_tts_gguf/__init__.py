@@ -40,5 +40,12 @@ if not logger.handlers:
     logger.info(f"日志系统初始化完成。日志文件: {log_file_path}")
 
 
+# 4. 注册 pip 安装的 CUDA 运行库目录
+#    必须在任何 `import onnxruntime` 之前执行，否则 CUDA EP 会因找不到
+#    cublasLt64/cudnn64/cufft64 而静默回退到 CPU。
+from .cuda_dll import ensure_cuda_dll_path  # noqa: E402
+
+ensure_cuda_dll_path()
+
 
 __all__ = ['logger', 'inference', 'export']
