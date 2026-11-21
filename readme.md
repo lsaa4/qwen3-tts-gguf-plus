@@ -8,6 +8,17 @@
 
 三步用起来：双击 `setup.bat` 装环境 → 准备 `model-base` 模型目录 → 双击 `启动GUI.bat`。
 
+![GUI](docs/images/gui-main.png)
+
+**效果试听**（点击下载后播放）：
+
+| 示例 | 时长 | 说明 |
+| :--- | ---: | :--- |
+| [中文音色克隆](docs/demo/zh_clone.mp3) | 8.9 s | 用克隆音色朗读中文 |
+| [英文跨语种克隆](docs/demo/en_clone.mp3) | 7.6 s | 同一音色克隆英文（跨语种） |
+
+适合：想在 Windows 本机跑中文 TTS、给 SillyTavern / Cherry Studio 这类客户端一个本地 OpenAI 语音接口、8G 显存的笔记本。不适合：要云端级并发吞吐，或需要 Linux 原生 GUI 的场景。
+
 ## 目录
 
 - [这个版本多了什么](#这个版本多了什么)
@@ -21,6 +32,7 @@
 - [导出模型](#导出模型)
 - [原理](#原理)
 - [常见问题](#常见问题)
+- [已知限制（欢迎 PR）](#已知限制欢迎-pr)
 
 ## 这个版本多了什么
 
@@ -28,6 +40,8 @@
 
 - **GUI 改造**（`qwen3_tts_gguf/gui`）：上游 GUI 本来就有克隆 / 自定义音色 / 音色设计 / 工具 / 设置 / 日志六个页，这里重做了视觉（顶部标题条、配色、中文字体、页面可滚动），并新增「服务」页——OpenAI 服务的启停、端口、状态都能在界面里点。
 - **OpenAI 兼容 HTTP 服务**（`tts_server.py`）：`/v1/audio/speech`、`/v1/voices`，SillyTavern、Cherry Studio、Open WebUI 直接填地址就能用。
+- **ONNX 也走 GPU**：N 卡可选 CUDA（`onnxruntime-gpu` + pip 安装的 CUDA 12 运行库，**不需要安装 CUDA Toolkit**），其它显卡走 DirectML；两个编码器也从固定 CPU 改为可上 GPU。
+- **CUDA 运行库自检**：修复了「装了 CUDA 版 llama.cpp 但缺 cudart/cublas，backend 静默退回 CPU」的问题；`install.py` 按后端 major 版本校验并自动补装。
 - **一键安装体检**（`install.py` + `setup.bat`）：Python 版本、虚拟环境、依赖、llama.cpp 运行库、模型、FFmpeg、音色目录逐项检查，缺什么装什么。
 - **一键导出模型**（`export_model.py` + `export-model.bat`）：自动找源模型、按顺序跑完十四个导出脚本、校验产物。
 - **中文文档与启动脚本**：`启动GUI.bat` / `启动服务.bat` / `克隆音色.bat`，双击即用。
@@ -46,8 +60,8 @@
 | Python | **3.14**（`pyproject.toml` 要求 `>=3.14`） |
 | 显卡 | 建议独显。N 卡走 CUDA 或 Vulkan；A 卡 / I 卡走 Vulkan；纯 CPU 也能跑，但 RTF > 1 |
 | 显存 | 1.7B 全套约 **1.8 GB**；0.6B 再省约 500 MB |
-| 磁盘 | 模型约 **1.5 GB**，llama.cpp 运行库约 94 MB，虚拟环境约 3.4 GB |
-| 其他 | FFmpeg（读取/转码音频，`setup.bat` 会自动装） |
+| 磁盘 | `model-base` 约 **2.3 GB**（含 embeddings）；llama.cpp 运行库约 **0.67 GB**（CUDA 版含 CUDA 运行库）；推理虚拟环境约 **0.3 GB** |
+| 其他 | FFmpeg（读取/转码音频；`setup.bat` 会尝试自动安装，失败时手动 `winget install Gyan.FFmpeg`） |
 
 `setup.bat` 会自动检查并补齐 Python 依赖、llama.cpp 运行库和 FFmpeg，只有模型需要你自己准备（见[模型](#模型)）。
 
@@ -85,14 +99,17 @@ RTF 0.35 表示生成 1 秒音频只要 0.35 秒，比实时播放快约三倍�
 ```
 [ OK ] Python 版本    3.14.7
 [ OK ] 虚拟环境 .venv  Python 3.14.7
-[ OK ] Python 依赖     齐全，加速 DmlExecutionProvider
-[ OK ] llama.cpp 运行库  qwen3_tts_gguf\inference\bin  共 94 MB
+[ OK ] Python 依赖     齐全，加速 CUDAExecutionProvider
+[ OK ] ONNX 加速后端   1.25.0  CUDA 可用
+[ OK ] llama.cpp 运行库  qwen3_tts_gguf\inference\bin  共 0.67 GB  后端 cuda
 [ FAIL ] 模型文件 model-base  目录不存在
 [ OK ] FFmpeg  7.1.1-essentials_build  C:\ffmpeg\bin\ffmpeg.EXE
 [ OK ] 音色目录  0 个音色（可自行克隆）
 ```
 
 第一遍通常只有「模型文件」一项是红的，这是正常的——下一步解决。
+
+> N 卡用户在装环境时会遇到「用 N 卡 CUDA 加速吗？」：选 `y` 会用 pip 安装 CUDA 12 运行库（约 700 MB，**不需要装 CUDA Toolkit**）；选 `n` 走 DirectML，依赖更轻，速度只差几个百分点（瓶颈在 Predictor）。两种都能用。
 
 只想检查不想改动，用命令行：
 
@@ -559,6 +576,12 @@ python 34-Quantize-Predictor-GGUF.py   # 量化为 Q8_0，推理默认加载这�
 **Q: 怎么调质量？**
 
 `TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`。温度控制随机性，种子控制复现。音色不稳就先固定种子多跑几次挑一个。
+
+## 已知限制（欢迎 PR）
+
+- **参考音频长度受上下文约束**：Talker 预填 token ≈ 12.5×参考秒数 + 参考文本，GUI 默认上下文 512 是按 5~15 秒参考音频设计的。46 秒级的长参考音频需要把「上下文大小」调到 1024/2048，否则 prefill 超过 batch 会直接崩溃（llama.cpp 断言，窗口闪退）。
+- **HTTP 服务参数还不完整**：固定走 ICL 模式、`max_steps` 固定 1024，没有跑飞保护；个别音色/文本组合会一直生成到 82 秒上限（听感是复读）。`zero_shot`、`max_steps` 做成请求参数还在待办。
+- **转码细节**：`response_format: pcm` 目前返回的是 WAV 容器；`speed` 在 >2x 或 <0.5x 时只生效一半（多级 atempo 的写法问题）。
 
 ## 相关链接
 

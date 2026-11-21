@@ -8,6 +8,17 @@ Built on [HaujetZhao/Qwen3-TTS-GGUF](https://github.com/HaujetZhao/Qwen3-TTS-GGU
 
 Three steps: run `setup.bat` to prepare the environment → get a `model-base` directory → run `启动GUI.bat`.
 
+![GUI](docs/images/gui-main.png)
+
+**Demo clips** (download to listen):
+
+| Clip | Length | Description |
+| :--- | ---: | :--- |
+| [Chinese voice cloning](docs/demo/zh_clone.mp3) | 8.9 s | Cloned voice reading Chinese |
+| [English cross-lingual cloning](docs/demo/en_clone.mp3) | 7.6 s | Same voice, English target (cross-lingual) |
+
+Good fit: running Chinese TTS locally on Windows, giving SillyTavern / Cherry Studio et al. a local OpenAI-compatible speech endpoint, laptops with 8 GB VRAM. Not a fit: cloud-scale throughput, or native Linux GUI.
+
 ## Contents
 
 - [What this version adds](#what-this-version-adds)
@@ -21,6 +32,7 @@ Three steps: run `setup.bat` to prepare the environment → get a `model-base` d
 - [Exporting models](#exporting-models)
 - [How it works](#how-it-works)
 - [FAQ](#faq)
+- [Known limitations](#known-limitations)
 
 ## What this version adds
 
@@ -28,6 +40,8 @@ Changes on top of upstream:
 
 - **GUI rework** (`qwen3_tts_gguf/gui`): upstream already shipped clone / custom voice / voice design / tools / settings / log tabs. Here the visuals are rebuilt (header bar, colours, CJK font, scrollable pages) and a new **Server** tab was added — start, stop, set the port and read the status of the HTTP server from the UI.
 - **OpenAI-compatible HTTP server** (`tts_server.py`): `/v1/audio/speech`, `/v1/voices`; point SillyTavern, Cherry Studio, Open WebUI or any custom endpoint at it.
+- **ONNX on the GPU too**: NVIDIA users can pick CUDA (`onnxruntime-gpu` plus CUDA 12 runtime libraries installed via pip — **no CUDA Toolkit required**), everyone else uses DirectML. The two encoders are no longer hard-wired to CPU either.
+- **CUDA runtime self-check**: fixes the case where a CUDA llama.cpp build silently fell back to CPU because cudart/cublas were missing; `install.py` now verifies the runtime by backend major version and installs it when needed.
 - **One-click install and health check** (`install.py` + `setup.bat`): checks Python version, venv, dependencies, llama.cpp runtime, models, FFmpeg and the voice folder, and installs what's missing.
 - **One-click model export** (`export_model.py` + `export-model.bat`): finds the source model, runs the fourteen export scripts in order, verifies the outputs.
 - **Chinese docs and launchers**: `启动GUI.bat` / `启动服务.bat` / `克隆音色.bat`.
@@ -46,8 +60,8 @@ Capabilities inherited from upstream (the inference core is untouched):
 | Python | **3.14** (`pyproject.toml` declares `>=3.14`) |
 | GPU | Dedicated GPU recommended. NVIDIA: CUDA or Vulkan; AMD / Intel: Vulkan; CPU-only works but RTF > 1 |
 | VRAM | ~**1.8 GB** for the full 1.7B set; the 0.6B saves another ~500 MB |
-| Disk | ~**1.5 GB** of models, ~94 MB llama.cpp runtime, ~3.4 GB venv |
-| Other | FFmpeg (installed automatically by `setup.bat`) |
+| Disk | ~**2.3 GB** of models (`model-base`, embeddings included), ~**0.67 GB** llama.cpp runtime (CUDA build bundles the CUDA libraries), ~**0.3 GB** inference venv |
+| Other | FFmpeg (reads/transcodes audio; `setup.bat` tries to install it, otherwise `winget install Gyan.FFmpeg`) |
 
 `setup.bat` handles Python dependencies, the llama.cpp runtime and FFmpeg. Only the model is up to you — see [Models](#models).
 
@@ -85,14 +99,17 @@ Double-click `setup.bat`. It checks the Python version, creates `.venv`, install
 ```
 [ OK ] Python version    3.14.7
 [ OK ] venv .venv        Python 3.14.7
-[ OK ] Python packages   complete, accelerator DmlExecutionProvider
-[ OK ] llama.cpp runtime qwen3_tts_gguf\inference\bin  94 MB
+[ OK ] Python packages   complete, accelerator CUDAExecutionProvider
+[ OK ] ONNX accelerator  1.25.0  CUDA available
+[ OK ] llama.cpp runtime qwen3_tts_gguf\inference\bin  0.67 GB  backend cuda
 [ FAIL ] Model model-base  directory missing
 [ OK ] FFmpeg  7.1.1-essentials_build  C:\ffmpeg\bin\ffmpeg.EXE
 [ OK ] Voice folder  9 voices
 ```
 
 On the first run usually only the model line is red — that is expected, the next step fixes it.
+
+> On NVIDIA cards the installer asks "用 N 卡 CUDA 加速吗？": answering `y` installs the CUDA 12 runtime via pip (~700 MB, **no CUDA Toolkit needed**); `n` keeps DirectML with fewer dependencies and is only a few percent slower (the Predictor is the bottleneck). Both work.
 
 Check only, without changing anything:
 
@@ -557,6 +574,12 @@ Three moves: encoder on CPU (−120 MB), switch to 0.6B (−500 MB), shorten the
 **Q: How do I tune quality?**
 
 `TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`. Temperature adds randomness, seeds make it reproducible. For a stable voice, fix the seed and pick the best take.
+
+## Known limitations (PRs welcome)
+
+- **Reference audio length is bounded by the context**: Talker prefill tokens ≈ 12.5 × reference seconds + reference text. The GUI default context of 512 assumes a 5–15 s reference; a 46 s reference needs the context raised to 1024/2048, otherwise the prefill exceeds the batch and llama.cpp aborts (the window disappears).
+- **The HTTP server is not fully parameterised yet**: it always runs ICL mode with `max_steps` fixed at 1024 and no runaway guard, so some voice/text pairs generate all the way to the 82 s cap (audibly repeating). `zero_shot` / `max_steps` as request parameters are TODO.
+- **Transcoding details**: `response_format: pcm` currently returns a WAV container; `speed` only applies half of the requested factor above 2× or below 0.5× (multiple atempo filters issue).
 
 ## Links
 
