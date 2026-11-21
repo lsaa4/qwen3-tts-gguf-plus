@@ -35,7 +35,6 @@
 - [常见问题](#常见问题)
 - [已知限制（欢迎 PR）](#已知限制欢迎-pr)
 - [路线图](#路线图)
-- [贡献](#贡献)
 
 ## 这个版本多了什么
 
@@ -679,13 +678,6 @@ GUI 默认上下文 512 是按 5~15 秒参考音频设计的。Talker 预填 tok
 - [ ] **发布**：`v0.1.0` Release（说明 + 产物校验值）、一键包网盘分发
 - [ ] **CI**：导出产物校验 + 推理冒烟测试（Windows runner）
 - [ ] **跨平台**：Linux 启动脚本与说明（目前以 Windows 为主）
-
-## 贡献
-
-- 问题/需求欢迎开 Issue，附上 `python install.py --check` 输出和 `log/latest.log` 的相关片段
-- 提 PR 前：`uv sync --extra dml` + `python install.py --check`；涉及导出的改动请附产物校验结果
-- **不要提交** `model-*`、`*.gguf`、`*.onnx`、音色 json/wav 或个人音频（`.gitignore` 已挡住，提交前看一眼 `git status`）
-- 代码风格：沿用现有文件结构与中文注释；日志不要加 emoji（Windows 控制台编码问题）
 
 ## 相关链接
 

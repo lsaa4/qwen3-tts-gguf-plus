@@ -35,7 +35,6 @@ Good fit: running Chinese TTS locally on Windows, giving SillyTavern / Cherry St
 - [FAQ](#faq)
 - [Known limitations](#known-limitations)
 - [Roadmap](#roadmap)
-- [Contributing](#contributing)
 
 ## What this version adds
 
@@ -677,13 +676,6 @@ Wrong torch version for the ONNX export. Measured here: torch **2.11.0** produce
 - [ ] **Release**: `v0.1.0` release notes + artifact checksums; one-click package distribution
 - [ ] **CI**: export verification + inference smoke test on a Windows runner
 - [ ] **Cross-platform**: Linux launcher and docs (Windows-first today)
-
-## Contributing
-
-- Open an issue with the `python install.py --check` output and the relevant part of `log/latest.log`
-- Before a PR: `uv sync --extra dml` + `python install.py --check`; export-related changes should include the output checksums
-- **Do not commit** `model-*`, `*.gguf`, `*.onnx`, voice json/wav or personal audio (`.gitignore` covers them — check `git status` first)
-- Style: keep the existing layout and Chinese comments; avoid emoji in log output (Windows console encoding issues)
 
 ## Links
 
