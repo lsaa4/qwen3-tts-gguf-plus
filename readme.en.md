@@ -24,6 +24,7 @@ Good fit: running Chinese TTS locally on Windows, giving SillyTavern / Cherry St
 - [What this version adds](#what-this-version-adds)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
+- [Project structure](#project-structure)
 - [Models](#models)
 - [Inference](#inference)
 - [HTTP API](#http-api)
@@ -33,6 +34,8 @@ Good fit: running Chinese TTS locally on Windows, giving SillyTavern / Cherry St
 - [How it works](#how-it-works)
 - [FAQ](#faq)
 - [Known limitations](#known-limitations)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
 
 ## What this version adds
 
@@ -51,6 +54,18 @@ Capabilities inherited from upstream (the inference core is untouched):
 - **Streaming synthesis**: play while generating, first audio in as little as 300 ms.
 - **Acceleration**: Talker / Predictor on llama.cpp (Vulkan or CUDA), Encoder / Decoder on ONNX Runtime (DirectML or CUDA).
 - **Deterministic control**: separate seeds for Talker and Predictor, reproducible output.
+
+### Change footprint (vs upstream `74feb58`, measured at v0.1.0)
+
+| Item | Value |
+| :--- | ---: |
+| New files | **19** (~2600 lines) |
+| Files with real changes | **48** |
+| Deleted files | 11 (voice anchors that upstream committed — privacy cleanup) |
+| Text churn | **+1582 / -694 lines** (23 more files differ only in line endings) |
+| README | 311 → 590+ lines (English mirrored) |
+
+The new code sits in four areas: **installer/health-check, HTTP server, one-click export, CLI tools**. `llama.py`, `talker.py`, `predictor.py`, `batch.py`, `prompt_builder.py`, `config.py` are **byte-identical to upstream**; `decoder.py` / `stream.py` / `voice.py` / `result.py` only had log strings and emoji cleaned up — inference logic untouched.
 
 ## Requirements
 
@@ -201,6 +216,40 @@ Don't want to pick by hand? Double-click `setup.bat`: it detects your GPU and dr
 **FFmpeg**
 
 Used for reading and transcoding audio; make sure `ffmpeg` is on `PATH`.
+
+## Project structure
+
+```text
+qwen3-tts-plus/
+├─ qwen3_tts_gguf/
+│  ├─ inference/            core engine: llama.cpp ctypes bindings, Talker/Predictor, batch lockstep, streaming, ONNX codec
+│  │  └─ bin/               llama.cpp runtime (not in git; downloaded by setup.bat / install.py)
+│  ├─ gui/                  ttkbootstrap UI: Clone / Custom voice / Voice design / Server / Tools / Settings / Log
+│  ├─ export/               HF weights → GGUF / ONNX (includes the patched llama.cpp conversion script)
+│  └─ service.py            OpenAI-compatible HTTP server (shared by the GUI Server tab and tts_server.py)
+├─ install.py + setup.bat              environment health check / one-click install
+├─ export_model.py + export-model.bat  one-click model-base export
+├─ tts_server.py                       CLI entry for the HTTP server
+├─ tts.py / clone.py                   CLI synthesis / build a voice anchor from reference audio
+├─ 01~47-*.py                          staged scripts (1x components, 2x Talker, 3x Predictor, 4x examples, 5x interactive/profile)
+├─ docs/                               screenshots, demo clips, design notes
+├─ Experience/                         export / compatibility gotchas
+├─ Qwen3-TTS-main/                     official PyTorch implementation (reference only, not used for inference)
+└─ model-base/                         export output (not in git)
+```
+
+Runtime chain:
+
+```mermaid
+flowchart LR
+    T[Target text] --> PB[PromptBuilder]
+    R[Reference audio] --> ENC[Encoder ONNX]
+    ENC --> PB
+    PB --> TK[Talker GGUF<br/>llama.cpp CUDA/Vulkan]
+    TK --> PR[Predictor GGUF<br/>llama.cpp]
+    PR --> DE[Decoder ONNX<br/>CUDA / DirectML]
+    DE --> W[wav / streaming / HTTP response]
+```
 
 ## Models
 
@@ -379,6 +428,19 @@ RTF < 1 means generation outpaces real-time playback.
 
 Machines without a dedicated GPU rarely reach RTF < 1, and streaming playback will stutter. Batch inference is the exception — see below.
 
+### More measurements (RTX 4060 Laptop 8G)
+
+| Scenario | Audio | Generation | RTF |
+| :--- | ---: | ---: | ---: |
+| Chinese · zero-shot · short sentence | 4.08 s | 1.54 s | 0.38 |
+| Chinese · zero-shot · 50 characters | 10.48 s | 4.04 s | 0.39 |
+| English · cross-lingual cloning | 7.04 s | 2.40 s | 0.34 |
+| HTTP server (wav) | 2.80 s | 1.14 s | 0.41 |
+| HTTP server (mp3, ffmpeg transcoding included) | 6.14 s | 2.29 s | 0.38 |
+
+- Engine load: 2.5–4 s (then reused); first audio ≈ 2.3 s (the first 12 frames must be generated first)
+- ONNX decoder on CUDA is ~2× faster than DirectML, but decoding is only ~16% of the chain, so **end-to-end is only ~3% faster** — the Predictor (15 sequential autoregressive steps per frame) is the bottleneck
+
 ### VRAM usage
 
 Full 1.7B set:
@@ -524,6 +586,17 @@ Think of it as body parts:
 
 Engines: Talker / Predictor on llama.cpp (GGUF, Vulkan / CUDA), Encoder / Decoder on ONNX Runtime (ONNX, DirectML / CUDA).
 
+```mermaid
+flowchart LR
+    A[Text] --> C[PromptBuilder]
+    B[Reference audio] --> E[Encoder ONNX]
+    E --> C
+    C --> T[Talker GGUF<br/>1.42B / Q5_K]
+    T --> P[Predictor GGUF<br/>142M / Q8_0]
+    P --> D[Decoder ONNX<br/>fp16]
+    D --> O[wav waveform]
+```
+
 ### Voice cloning
 
 Cloning is **continuation**, an in-context task.
@@ -575,11 +648,42 @@ Three moves: encoder on CPU (−120 MB), switch to 0.6B (−500 MB), shorten the
 
 `TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`. Temperature adds randomness, seeds make it reproducible. For a stable voice, fix the seed and pick the best take.
 
+**Q: It fails with `cuDNN is unavailable / cudnn64_9.dll` at startup?**
+
+`onnxruntime-gpu` is installed but the CUDA 12 runtime libraries (cuBLAS/cuDNN/cuFFT) are incomplete. Options: rerun `setup.bat` so `install.py` installs the nvidia-*-cu12 wheels; or `uv sync --extra cuda`; or switch to DirectML: delete `.venv` and `uv sync --extra dml` (only a few percent slower).
+
+**Q: With a 40 s+ reference audio the window disappears as soon as generation starts?**
+
+The GUI default context of 512 assumes a 5–15 s reference. Talker prefill tokens ≈ 12.5 × reference seconds + reference text: a 46 s reference is ~590 tokens and exceeds the batch, so llama.cpp asserts and aborts. Raise "context size" to 1024/2048 and set concurrency to 1 — or, better, trim the reference to 5–15 s and rebuild the voice anchor.
+
+**Q: The HTTP server sometimes generates 80+ seconds and sounds like it's repeating?**
+
+The server always uses ICL mode with `max_steps` fixed at 1024 (≈82 s), so some voice/text pairs never emit EOS. Use voices with an accurate reference transcript and clean audio first; a proper fix is on the [roadmap](#roadmap).
+
+**Q: A decoder ONNX I exported fails on DirectML with a Reshape / `E_INVALIDARG` error?**
+
+Wrong torch version for the ONNX export. Measured here: torch **2.11.0** produces a 936-node decoder compatible with DirectML; the 916-node graph from the 2.14+cu132 version pinned in `uv.lock` fails on DML. Re-run scripts 11/12/13/16 with torch 2.11.0 (GGUF export is unaffected).
+
 ## Known limitations (PRs welcome)
 
 - **Reference audio length is bounded by the context**: Talker prefill tokens ≈ 12.5 × reference seconds + reference text. The GUI default context of 512 assumes a 5–15 s reference; a 46 s reference needs the context raised to 1024/2048, otherwise the prefill exceeds the batch and llama.cpp aborts (the window disappears).
 - **The HTTP server is not fully parameterised yet**: it always runs ICL mode with `max_steps` fixed at 1024 and no runaway guard, so some voice/text pairs generate all the way to the 82 s cap (audibly repeating). `zero_shot` / `max_steps` as request parameters are TODO.
 - **Transcoding details**: `response_format: pcm` currently returns a WAV container; `speed` only applies half of the requested factor above 2× or below 0.5× (multiple atempo filters issue).
+
+## Roadmap
+
+- [ ] **HTTP server parameterisation**: request-level `zero_shot` / `max_steps` / `temperature`, runaway truncation guard; real raw `pcm`; fix multi-stage `atempo` for `speed`
+- [ ] **GUI input validation**: check reference-audio tokens against the context before generating, show an actionable message instead of crashing
+- [ ] **Release**: `v0.1.0` release notes + artifact checksums; one-click package distribution
+- [ ] **CI**: export verification + inference smoke test on a Windows runner
+- [ ] **Cross-platform**: Linux launcher and docs (Windows-first today)
+
+## Contributing
+
+- Open an issue with the `python install.py --check` output and the relevant part of `log/latest.log`
+- Before a PR: `uv sync --extra dml` + `python install.py --check`; export-related changes should include the output checksums
+- **Do not commit** `model-*`, `*.gguf`, `*.onnx`, voice json/wav or personal audio (`.gitignore` covers them — check `git status` first)
+- Style: keep the existing layout and Chinese comments; avoid emoji in log output (Windows console encoding issues)
 
 ## Links
 

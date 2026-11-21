@@ -24,6 +24,7 @@
 - [这个版本多了什么](#这个版本多了什么)
 - [环境要求](#环境要求)
 - [快速开始](#快速开始)
+- [项目结构](#项目结构)
 - [模型](#模型)
 - [推理](#推理)
 - [HTTP API 服务](#http-api-服务)
@@ -33,6 +34,8 @@
 - [原理](#原理)
 - [常见问题](#常见问题)
 - [已知限制（欢迎 PR）](#已知限制欢迎-pr)
+- [路线图](#路线图)
+- [贡献](#贡献)
 
 ## 这个版本多了什么
 
@@ -51,6 +54,18 @@
 - **流式合成**：边推边播，首音延迟最低 300ms 内。
 - **加速推理**：Talker / Predictor 走 llama.cpp（Vulkan 或 CUDA），Encoder / Decoder 走 ONNX Runtime（DirectML 或 CUDA）。
 - **确定性控制**：Talker 与 Predictor 的随机种子可独立设置，输出可复现。
+
+### 改动规模（相对上游 `74feb58`，v0.1.0 时统计）
+
+| 项目 | 数值 |
+| :--- | ---: |
+| 新增文件 | **19 个**（约 2600 行） |
+| 内容真实修改 | **48 个**文件 |
+| 删除文件 | 11 个（上游入库的音色样例，属隐私清理） |
+| 文本改动 | **+1582 / -694 行**（另 23 个文件仅换行差异） |
+| README | 311 行 → 590+ 行（英文版同步） |
+
+新增代码集中在四块：**安装体检 / HTTP 服务 / 一键导出 / 命令行工具**。`llama.py`、`talker.py`、`predictor.py`、`batch.py`、`prompt_builder.py`、`config.py` 与上游**逐字节一致**；`decoder.py` / `stream.py` / `voice.py` / `result.py` 只清理了日志文案与 emoji，推理逻辑未改。
 
 ## 环境要求
 
@@ -203,6 +218,40 @@ uv sync --extra gpu      # CUDA（N 卡，更快）
 **FFmpeg**
 
 用于读写音频文件，装完确保 `ffmpeg` 在 PATH 里。
+
+## 项目结构
+
+```text
+qwen3-tts-plus/
+├─ qwen3_tts_gguf/
+│  ├─ inference/            推理内核：llama.cpp ctypes 绑定、Talker/Predictor、批量 lockstep、流式、ONNX 编解码
+│  │  └─ bin/               llama.cpp 运行库（不入 git，setup.bat / install.py 自动下载）
+│  ├─ gui/                  ttkbootstrap 界面：克隆 / 自定义音色 / 音色设计 / 服务 / 工具 / 设置 / 日志
+│  ├─ export/               HF 权重 → GGUF / ONNX 的导出实现（含 llama.cpp 官方 convert 脚本改版）
+│  └─ service.py            OpenAI 兼容 HTTP 服务实现（GUI 服务页与 tts_server.py 共用）
+├─ install.py + setup.bat            环境体检 / 一键安装
+├─ export_model.py + export-model.bat 一键导出 model-base
+├─ tts_server.py                     命令行启动 HTTP 服务
+├─ tts.py / clone.py                 命令行合成 / 用参考音频生成音色锚点
+├─ 01~47-*.py                        分步脚本（1x 组件导出、2x Talker、3x Predictor、4x 推理示例、5x 交互/剖析）
+├─ docs/                             截图、演示音频、设计稿
+├─ Experience/                       导出与兼容性踩坑笔记
+├─ Qwen3-TTS-main/                   官方 PyTorch 实现（仅导出时参考，不参与推理）
+└─ model-base/                       导出产物（不入 git）
+```
+
+运行时链路：
+
+```mermaid
+flowchart LR
+    T[目标文本] --> PB[PromptBuilder]
+    R[参考音频] --> ENC[Encoder ONNX]
+    ENC --> PB
+    PB --> TK[Talker GGUF<br/>llama.cpp CUDA/Vulkan]
+    TK --> PR[Predictor GGUF<br/>llama.cpp]
+    PR --> DE[Decoder ONNX<br/>CUDA / DirectML]
+    DE --> W[wav / 流式播放 / HTTP 输出]
+```
 
 ## 模型
 
@@ -381,6 +430,19 @@ RTF < 1 表示生成比实时播放快。
 
 没有独显的机器很难做到 RTF < 1，流式播放会卡顿。批量推理例外，见[批量显存估算](#批量显存估算)。
 
+### 不同任务实测补充（RTX 4060 Laptop 8G）
+
+| 场景 | 音频时长 | 生成耗时 | RTF |
+| :--- | ---: | ---: | ---: |
+| 中文 · 零样本 · 短句 | 4.08 s | 1.54 s | 0.38 |
+| 中文 · 零样本 · 50 字 | 10.48 s | 4.04 s | 0.39 |
+| 英文 · 跨语种克隆 | 7.04 s | 2.40 s | 0.34 |
+| HTTP 服务（wav） | 2.80 s | 1.14 s | 0.41 |
+| HTTP 服务（mp3，含 ffmpeg 转码） | 6.14 s | 2.29 s | 0.38 |
+
+- 引擎载入 2.5~4 秒（之后复用）；首音延迟约 2.3 秒（要先生成第一批 12 帧）
+- ONNX 解码器 CUDA 比 DirectML 快约 2 倍，但解码只占整条链路约 16%，**端到端只差约 3%**——瓶颈在 Predictor（每帧 15 次串行自回归）
+
 ### 显存占用
 
 1.7B 全套：
@@ -526,6 +588,17 @@ python 34-Quantize-Predictor-GGUF.py   # 量化为 Q8_0，推理默认加载这�
 
 推理引擎：Talker / Predictor 用 llama.cpp（GGUF，Vulkan / CUDA 加速），Encoder / Decoder 用 ONNX Runtime（ONNX，DirectML / CUDA 加速）。
 
+```mermaid
+flowchart LR
+    A[文本] --> C[PromptBuilder]
+    B[参考音频] --> E[Encoder ONNX]
+    E --> C
+    C --> T[Talker GGUF<br/>1.42B / Q5_K]
+    T --> P[Predictor GGUF<br/>142M / Q8_0]
+    P --> D[Decoder ONNX<br/>fp16]
+    D --> O[wav 波形]
+```
+
 ### 声音克隆
 
 克隆的本质是**接续说话**（In-Context Learning）。
@@ -577,11 +650,42 @@ python 34-Quantize-Predictor-GGUF.py   # 量化为 Q8_0，推理默认加载这�
 
 `TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`。温度控制随机性，种子控制复现。音色不稳就先固定种子多跑几次挑一个。
 
+**Q: 启动或生成时报 `cuDNN is unavailable / cudnn64_9.dll` 加载失败？**
+
+装了 `onnxruntime-gpu`，但 CUDA 12 运行库（cuBLAS/cuDNN/cuFFT）不齐。三条路：重跑 `setup.bat` 让 `install.py` 补装 nvidia-*-cu12 wheel；或 `uv sync --extra cuda`；或改走 DirectML：删掉 `.venv` 后 `uv sync --extra dml`（速度只差几个百分点）。
+
+**Q: 用 40 秒以上的参考音频，一点生成窗口就闪退？**
+
+GUI 默认上下文 512 是按 5~15 秒参考音频设计的。Talker 预填 token ≈ 12.5 × 参考秒数 + 参考文本，46 秒参考约 590 token，超过 batch 会触发 llama.cpp 断言直接崩。把「上下文大小」调到 1024/2048、并发路数调 1 即可；更推荐把参考音频裁到 5~15 秒重做音色锚点。
+
+**Q: HTTP 服务偶尔生成 80 多秒还没说完（像在复读）？**
+
+服务端固定走 ICL 且 `max_steps=1024`（≈82 秒），个别音色/文本组合不会自然收尾。先换参考文本准确、参考音频干净的音色；要彻底解决等[路线图](#路线图)里的服务参数化。
+
+**Q: 自己导出的 decoder ONNX 在 DirectML 下报 Reshape / `E_INVALIDARG`，引擎加载失败？**
+
+导出用的 torch 版本不对。实测 torch **2.11.0** 导出的 ONNX（936 节点）与 DirectML 兼容；项目 `uv.lock` 里的 2.14+cu132 导出的 916 节点版本在 DML 下会失败。重导 11/12/13/16 号脚本即可（GGUF 导出不受影响）。
+
 ## 已知限制（欢迎 PR）
 
 - **参考音频长度受上下文约束**：Talker 预填 token ≈ 12.5×参考秒数 + 参考文本，GUI 默认上下文 512 是按 5~15 秒参考音频设计的。46 秒级的长参考音频需要把「上下文大小」调到 1024/2048，否则 prefill 超过 batch 会直接崩溃（llama.cpp 断言，窗口闪退）。
 - **HTTP 服务参数还不完整**：固定走 ICL 模式、`max_steps` 固定 1024，没有跑飞保护；个别音色/文本组合会一直生成到 82 秒上限（听感是复读）。`zero_shot`、`max_steps` 做成请求参数还在待办。
 - **转码细节**：`response_format: pcm` 目前返回的是 WAV 容器；`speed` 在 >2x 或 <0.5x 时只生效一半（多级 atempo 的写法问题）。
+
+## 路线图
+
+- [ ] **HTTP 服务参数化**：请求级 `zero_shot` / `max_steps` / `temperature`，跑飞截断保护；`pcm` 返回真裸流；修复 `speed` 多级 atempo
+- [ ] **GUI 输入校验**：生成前检查「参考音频 token 数 vs 上下文」，超限给出可操作提示（而不是崩溃）
+- [ ] **发布**：`v0.1.0` Release（说明 + 产物校验值）、一键包网盘分发
+- [ ] **CI**：导出产物校验 + 推理冒烟测试（Windows runner）
+- [ ] **跨平台**：Linux 启动脚本与说明（目前以 Windows 为主）
+
+## 贡献
+
+- 问题/需求欢迎开 Issue，附上 `python install.py --check` 输出和 `log/latest.log` 的相关片段
+- 提 PR 前：`uv sync --extra dml` + `python install.py --check`；涉及导出的改动请附产物校验结果
+- **不要提交** `model-*`、`*.gguf`、`*.onnx`、音色 json/wav 或个人音频（`.gitignore` 已挡住，提交前看一眼 `git status`）
+- 代码风格：沿用现有文件结构与中文注释；日志不要加 emoji（Windows 控制台编码问题）
 
 ## 相关链接
 
