@@ -278,7 +278,7 @@ class TTSPageBase(ttkb.Frame):
         row += 1
 
         self._build_param_grid(group, row)
-        self._build_control_row(group, row + 1)
+        self._build_control_row(group, row + 2)  # 参数一组 + 高级参数一组
 
     def _build_source_rows(self, group):
         """推理区顶部源控件（克隆源/说话人等），子类按需覆写，返回占用的行数"""
@@ -295,6 +295,18 @@ class TTSPageBase(ttkb.Frame):
             (1, 2, "seed", "gen.talker_seed", "42", "entry"),
             (0, 4, "sub_temperature", "gen.predictor_temp", "0.2", "entry"),
             (1, 4, "sub_seed", "gen.predictor_seed", "45", "entry"),
+        ]
+
+    def _advanced_param_entries(self):
+        """高级采样参数（TTSConfig 直通，默认值 = 引擎默认）：(行, 标签列, 键, 标签 key, 默认值)"""
+        return [
+            (0, 0, "top_p", "gen.top_p", "1.0"),
+            (0, 2, "top_k", "gen.top_k", "50"),
+            (0, 4, "min_p", "gen.min_p", "0.0"),
+            (1, 0, "repeat_penalty", "gen.repeat_penalty", "1.05"),
+            (1, 2, "frequency_penalty", "gen.frequency_penalty", "0.0"),
+            (1, 4, "presence_penalty", "gen.presence_penalty", "0.0"),
+            (2, 0, "penalty_last_n", "gen.penalty_last_n", "128"),
         ]
 
     def _build_param_grid(self, group, row):
@@ -316,6 +328,22 @@ class TTSPageBase(ttkb.Frame):
                 ttkb.Entry(pg, textvariable=var, width=10).grid(row=r + 1, column=col + 1, sticky=EW, padx=(0, 18), pady=3)
             ttkb.Label(pg, text=t(label), width=12).grid(row=r + 1, column=col, sticky=W, padx=(0, 6), pady=3)
             self.param_vars[key] = var
+
+        # 高级采样参数：单独一组，默认值即引擎默认，不改也能用
+        ag = ttkb.Labelframe(group, text=t("gen.adv_group"), padding=8)
+        ag.grid(row=row + 1, column=0, columnspan=3, sticky=EW, pady=(0, 8))
+        for col in (1, 3, 5):
+            ag.columnconfigure(col, weight=1)
+        for r, col, key, label, default in self._advanced_param_entries():
+            var = tk.StringVar(value=default)
+            ttkb.Entry(ag, textvariable=var, width=10).grid(row=r + 1, column=col + 1, sticky=EW,
+                                                            padx=(0, 18), pady=3)
+            ttkb.Label(ag, text=t(label), width=12).grid(row=r + 1, column=col, sticky=W,
+                                                         padx=(0, 6), pady=3)
+            self.param_vars[key] = var
+        ttkb.Label(ag, text=t("gen.adv_hint"), foreground="#6b7280", wraplength=900,
+                   justify=LEFT).grid(row=len(self._advanced_param_entries()) + 1, column=0,
+                                      columnspan=6, sticky=W, pady=(5, 0))
 
     def _selected_language(self):
         """语言下拉选中值 -> 引擎参数：Auto 传 None 走模型自适应"""
@@ -488,12 +516,27 @@ class TTSPageBase(ttkb.Frame):
 
         # tkinter 变量必须在 UI 线程读——参数在此读好再传给后台线程
         try:
+            def _num(key, cast, lo, hi):
+                """读高级参数并做范围校验，越界按格式错误处理"""
+                v = cast(self.param_vars[key].get())
+                if not (lo <= v <= hi):
+                    raise ValueError(key)
+                return v
+
             cfg = TTSConfig(
                 max_steps=int(self.param_vars["max_steps"].get()),
                 temperature=float(self.param_vars["temperature"].get()),
                 seed=int(self.param_vars["seed"].get()),
                 sub_temperature=float(self.param_vars["sub_temperature"].get()),
                 sub_seed=int(self.param_vars["sub_seed"].get()),
+                # 高级采样参数（默认值即引擎默认，见 TTSConfig）
+                top_p=_num("top_p", float, 1e-6, 1.0),
+                top_k=_num("top_k", int, 0, 100000),
+                min_p=_num("min_p", float, 0.0, 1.0),
+                repeat_penalty=_num("repeat_penalty", float, 1e-6, 10.0),
+                frequency_penalty=_num("frequency_penalty", float, -10.0, 10.0),
+                presence_penalty=_num("presence_penalty", float, -10.0, 10.0),
+                penalty_last_n=_num("penalty_last_n", int, 0, 8192),
                 streaming=False,
             )
             n_ctx = int(self.n_ctx.get())

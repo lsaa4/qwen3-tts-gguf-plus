@@ -304,6 +304,11 @@ Double-click `启动GUI.bat`, or run `python 52-GUI.py`.
 
 At load time you can pick the LLM device (GPU/CPU) and the ONNX device (GPU/CPU) separately. Short on VRAM? Move the encoder to CPU — it only extracts features.
 
+The parameter panel has two groups:
+
+- **Basic**: language, max steps, Talker temperature/seed, Predictor temperature/seed — what to say, how long, and how random
+- **Advanced sampling**: Top-P / Top-K / Min-P / repeat / frequency / presence penalty / penalty window — defaults equal the engine defaults; try `min_p=0.05` to reduce artifacts and `repeat_penalty=1.05` against repetition; these do not affect speed
+
 ### Scripts
 
 Three examples, one per model type:
@@ -645,7 +650,7 @@ Three moves: encoder on CPU (−120 MB), switch to 0.6B (−500 MB), shorten the
 
 **Q: How do I tune quality?**
 
-`TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`. Temperature adds randomness, seeds make it reproducible. For a stable voice, fix the seed and pick the best take.
+`TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`. Temperature adds randomness, seeds make it reproducible. For a stable voice, fix the seed and pick the best take. The GUI's "Advanced sampling" group exposes Top-P / Top-K / Min-P / penalties directly — no code change needed.
 
 **Q: It fails with `cuDNN is unavailable / cudnn64_9.dll` at startup?**
 

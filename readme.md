@@ -306,6 +306,11 @@ chinese、english、japanese、korean、german、spanish、french、russian、it
 
 模型载入时可以分别指定 LLM 设备（GPU/CPU）和 ONNX 组件设备（GPU/CPU）。显存不够就把编码器丢给 CPU，它只做特征提取，不吃算力。
 
+参数区分两组：
+
+- **基础参数**：语言、最大步数、Talker 温度/种子、Predictor 温度/种子——决定说什么、说多长、随机性多大
+- **高级采样参数**：Top-P / Top-K / Min-P / 重复惩罚 / 频率惩罚 / 存在惩罚 / 惩罚回溯长度——默认值就是引擎默认值；`min_p` 试 0.05 可减少电音，`repeat_penalty` 1.05 治复读；改这些不影响速度
+
 ### 脚本模式
 
 三个示例脚本，对应三种模型：
@@ -647,7 +652,7 @@ flowchart LR
 
 **Q: 怎么调质量？**
 
-`TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`。温度控制随机性，种子控制复现。音色不稳就先固定种子多跑几次挑一个。
+`TTSConfig(temperature=0.8, sub_temperature=0.8, seed=42, sub_seed=45)`。温度控制随机性，种子控制复现。音色不稳就先固定种子多跑几次挑一个。GUI 参数区下方的「高级采样参数」可以直接改 Top-P / Top-K / Min-P / 惩罚项，不用改代码。
 
 **Q: 启动或生成时报 `cuDNN is unavailable / cudnn64_9.dll` 加载失败？**
 
